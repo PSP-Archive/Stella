@@ -1,0 +1,47 @@
+{
+    IBClasses = (
+        {
+            ACTIONS = {showPanel = id; }; 
+            CLASS = AboutBox; 
+            LANGUAGE = ObjC; 
+            OUTLETS = {appNameField = id; creditsField = id; versionField = id; }; 
+            SUPERCLASS = NSObject; 
+        }, 
+        {CLASS = FirstResponder; LANGUAGE = ObjC; SUPERCLASS = NSObject; }, 
+        {
+            ACTIONS = {
+                biggerScreen = id; 
+                doPrefs = id; 
+                fullScreen = id; 
+                grabMouse = id; 
+                heightMinus = id; 
+                heightPlus = id; 
+                mergeProps = id; 
+                ntscPalMode = id; 
+                openCart = id; 
+                paddleChange = id; 
+                pauseGame = id; 
+                restartGame = id; 
+                saveProps = id; 
+                smallerScreen = id; 
+                speedLimit = id; 
+                toggleGlFilter = id; 
+                togglePallette = id; 
+                volumeMinus = id; 
+                volumePlus = id; 
+                widthMinus = id; 
+                widthPlus = id; 
+                xStartMinus = id; 
+                xStartPlus = id; 
+                yStartMinus = id; 
+                yStartPlus = id; 
+            }; 
+            CLASS = Menus; 
+            LANGUAGE = ObjC; 
+            SUPERCLASS = NSObject; 
+        }, 
+        {CLASS = Preferences; LANGUAGE = ObjC; SUPERCLASS = NSObject; }, 
+        {CLASS = SDLMain; LANGUAGE = ObjC; SUPERCLASS = NSObject; }
+    ); 
+    IBVersion = 1; 
+}
