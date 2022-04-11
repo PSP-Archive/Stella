@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: TIA.cxx,v 1.56 2005/07/21 04:10:15 urchlay Exp $
+// $Id: TIA.cxx,v 1.65 2005/12/17 01:23:07 stephena Exp $
 //============================================================================
 
 #include <cassert>
@@ -30,6 +30,7 @@
 #include "Deserializer.hxx"
 #include "Settings.hxx"
 #include "Sound.hxx"
+#include "GuiUtils.hxx"
 
 #define HBLANK 68
 
@@ -45,13 +46,15 @@ TIA::TIA(const Console& console, Settings& settings)
       myCOLUP0(myColor[2]),
       myCOLUP1(myColor[3])
 {
+  uInt32 i;
+
   // Allocate buffers for two frame buffers
   myCurrentFrameBuffer = new uInt8[160 * 300];
   myPreviousFrameBuffer = new uInt8[160 * 300];
 
   myFrameGreyed = false;
 
-  for(uInt32 i = 0; i < 6; ++i)
+  for(i = 0; i < 6; ++i)
     myBitEnabled[i] = true;
 
   for(uInt16 x = 0; x < 2; ++x)
@@ -91,10 +94,8 @@ TIA::TIA(const Console& console, Settings& settings)
     }
   }
 
-  for(uInt32 i = 0; i < 640; ++i)
-  {
+  for(i = 0; i < 640; ++i)
     ourDisabledMaskTable[i] = 0;
-  }
 
   // Compute all of the mask tables
   computeBallMaskTable();
@@ -136,11 +137,12 @@ void TIA::reset()
   // Reset pixel pointer and drawing flag
   myFramePointer = myCurrentFrameBuffer;
 
+  myYStart = atoi(myConsole.properties().get("Display.YStart").c_str());
+  myHeight = atoi(myConsole.properties().get("Display.Height").c_str());
+
   // Calculate color clock offsets for starting and stoping frame drawing
-  myStartDisplayOffset = 228 * 
-      atoi(myConsole.properties().get("Display.YStart").c_str());
-  myStopDisplayOffset = myStartDisplayOffset + 228 *
-      atoi(myConsole.properties().get("Display.Height").c_str());
+  myStartDisplayOffset = 228 * myYStart;
+  myStopDisplayOffset = myStartDisplayOffset + 228 * myHeight;
 
   // Reasonable values to start and stop the current frame drawing
   myClockWhenFrameStarted = mySystem->cycles() * 3;
@@ -216,12 +218,16 @@ void TIA::reset()
   myDumpDisabledCycle = 0;
 
   myAllowHMOVEBlanks = 
-      (myConsole.properties().get("Emulation.HmoveBlanks") == "Yes");
+      (myConsole.properties().get("Emulation.HmoveBlanks", true) == "YES");
 
   myFrameXStart = atoi(myConsole.properties().get("Display.XStart").c_str());
   myFrameWidth = atoi(myConsole.properties().get("Display.Width").c_str());
   myFrameYStart = atoi(myConsole.properties().get("Display.YStart").c_str());
   myFrameHeight = atoi(myConsole.properties().get("Display.Height").c_str());
+
+  // Make sure frameHeight is no less than 190 pixels
+  // This is a hack for the onscreen menus
+  myFrameHeight = MAX((int)myFrameHeight, 190);
 
   // Make sure the starting x and width values are reasonable
   if((myFrameXStart + myFrameWidth) > 160)
@@ -231,7 +237,7 @@ void TIA::reset()
     myFrameWidth = 160;
   }
 
-  if(myConsole.properties().get("Display.Format") == "PAL")
+  if(myConsole.properties().get("Display.Format", true) == "PAL")
   {
     myColorLossEnabled = true;
     myMaximumNumberOfScanlines = 342;
@@ -304,59 +310,59 @@ bool TIA::save(Serializer& out)
   {
     out.putString(device);
 
-    out.putLong(myClockWhenFrameStarted);
-    out.putLong(myClockStartDisplay);
-    out.putLong(myClockStopDisplay);
-    out.putLong(myClockAtLastUpdate);
-    out.putLong(myClocksToEndOfScanLine);
-    out.putLong(myScanlineCountForLastFrame);
-    out.putLong(myCurrentScanline);
-    out.putLong(myVSYNCFinishClock);
+    out.putInt(myClockWhenFrameStarted);
+    out.putInt(myClockStartDisplay);
+    out.putInt(myClockStopDisplay);
+    out.putInt(myClockAtLastUpdate);
+    out.putInt(myClocksToEndOfScanLine);
+    out.putInt(myScanlineCountForLastFrame);
+    out.putInt(myCurrentScanline);
+    out.putInt(myVSYNCFinishClock);
 
-    out.putLong(myEnabledObjects);
+    out.putInt(myEnabledObjects);
 
-    out.putLong(myVSYNC);
-    out.putLong(myVBLANK);
-    out.putLong(myNUSIZ0);
-    out.putLong(myNUSIZ1);
+    out.putInt(myVSYNC);
+    out.putInt(myVBLANK);
+    out.putInt(myNUSIZ0);
+    out.putInt(myNUSIZ1);
 
-    out.putLong(myCOLUP0);
-    out.putLong(myCOLUP1);
-    out.putLong(myCOLUPF);
-    out.putLong(myCOLUBK);
+    out.putInt(myCOLUP0);
+    out.putInt(myCOLUP1);
+    out.putInt(myCOLUPF);
+    out.putInt(myCOLUBK);
 
-    out.putLong(myCTRLPF);
-    out.putLong(myPlayfieldPriorityAndScore);
+    out.putInt(myCTRLPF);
+    out.putInt(myPlayfieldPriorityAndScore);
     out.putBool(myREFP0);
     out.putBool(myREFP1);
-    out.putLong(myPF);
-    out.putLong(myGRP0);
-    out.putLong(myGRP1);
-    out.putLong(myDGRP0);
-    out.putLong(myDGRP1);
+    out.putInt(myPF);
+    out.putInt(myGRP0);
+    out.putInt(myGRP1);
+    out.putInt(myDGRP0);
+    out.putInt(myDGRP1);
     out.putBool(myENAM0);
     out.putBool(myENAM1);
     out.putBool(myENABL);
     out.putBool(myDENABL);
-    out.putLong(myHMP0);
-    out.putLong(myHMP1);
-    out.putLong(myHMM0);
-    out.putLong(myHMM1);
-    out.putLong(myHMBL);
+    out.putInt(myHMP0);
+    out.putInt(myHMP1);
+    out.putInt(myHMM0);
+    out.putInt(myHMM1);
+    out.putInt(myHMBL);
     out.putBool(myVDELP0);
     out.putBool(myVDELP1);
     out.putBool(myVDELBL);
     out.putBool(myRESMP0);
     out.putBool(myRESMP1);
-    out.putLong(myCollision);
-    out.putLong(myPOSP0);
-    out.putLong(myPOSP1);
-    out.putLong(myPOSM0);
-    out.putLong(myPOSM1);
-    out.putLong(myPOSBL);
+    out.putInt(myCollision);
+    out.putInt(myPOSP0);
+    out.putInt(myPOSP1);
+    out.putInt(myPOSM0);
+    out.putInt(myPOSM1);
+    out.putInt(myPOSBL);
 
-    out.putLong(myCurrentGRP0);
-    out.putLong(myCurrentGRP1);
+    out.putInt(myCurrentGRP0);
+    out.putInt(myCurrentGRP1);
 
 // pointers
 //  myCurrentBLMask = ourBallMaskTable[0][0];
@@ -366,13 +372,13 @@ bool TIA::save(Serializer& out)
 //  myCurrentP1Mask = ourPlayerMaskTable[0][0][0];
 //  myCurrentPFMask = ourPlayfieldTable[0];
 
-    out.putLong(myLastHMOVEClock);
+    out.putInt(myLastHMOVEClock);
     out.putBool(myHMOVEBlankEnabled);
     out.putBool(myM0CosmicArkMotionEnabled);
-    out.putLong(myM0CosmicArkCounter);
+    out.putInt(myM0CosmicArkCounter);
 
     out.putBool(myDumpEnabled);
-    out.putLong(myDumpDisabledCycle);
+    out.putInt(myDumpDisabledCycle);
 
     // Save the sound sample stuff ...
     mySound->save(out);
@@ -401,59 +407,59 @@ bool TIA::load(Deserializer& in)
     if(in.getString() != device)
       return false;
 
-    myClockWhenFrameStarted = (Int32) in.getLong();
-    myClockStartDisplay = (Int32) in.getLong();
-    myClockStopDisplay = (Int32) in.getLong();
-    myClockAtLastUpdate = (Int32) in.getLong();
-    myClocksToEndOfScanLine = (Int32) in.getLong();
-    myScanlineCountForLastFrame = (Int32) in.getLong();
-    myCurrentScanline = (Int32) in.getLong();
-    myVSYNCFinishClock = (Int32) in.getLong();
+    myClockWhenFrameStarted = (Int32) in.getInt();
+    myClockStartDisplay = (Int32) in.getInt();
+    myClockStopDisplay = (Int32) in.getInt();
+    myClockAtLastUpdate = (Int32) in.getInt();
+    myClocksToEndOfScanLine = (Int32) in.getInt();
+    myScanlineCountForLastFrame = (Int32) in.getInt();
+    myCurrentScanline = (Int32) in.getInt();
+    myVSYNCFinishClock = (Int32) in.getInt();
 
-    myEnabledObjects = (uInt8) in.getLong();
+    myEnabledObjects = (uInt8) in.getInt();
 
-    myVSYNC = (uInt8) in.getLong();
-    myVBLANK = (uInt8) in.getLong();
-    myNUSIZ0 = (uInt8) in.getLong();
-    myNUSIZ1 = (uInt8) in.getLong();
+    myVSYNC = (uInt8) in.getInt();
+    myVBLANK = (uInt8) in.getInt();
+    myNUSIZ0 = (uInt8) in.getInt();
+    myNUSIZ1 = (uInt8) in.getInt();
 
-    myCOLUP0 = (uInt32) in.getLong();
-    myCOLUP1 = (uInt32) in.getLong();
-    myCOLUPF = (uInt32) in.getLong();
-    myCOLUBK = (uInt32) in.getLong();
+    myCOLUP0 = (uInt32) in.getInt();
+    myCOLUP1 = (uInt32) in.getInt();
+    myCOLUPF = (uInt32) in.getInt();
+    myCOLUBK = (uInt32) in.getInt();
 
-    myCTRLPF = (uInt8) in.getLong();
-    myPlayfieldPriorityAndScore = (uInt8) in.getLong();
+    myCTRLPF = (uInt8) in.getInt();
+    myPlayfieldPriorityAndScore = (uInt8) in.getInt();
     myREFP0 = in.getBool();
     myREFP1 = in.getBool();
-    myPF = (uInt32) in.getLong();
-    myGRP0 = (uInt8) in.getLong();
-    myGRP1 = (uInt8) in.getLong();
-    myDGRP0 = (uInt8) in.getLong();
-    myDGRP1 = (uInt8) in.getLong();
+    myPF = (uInt32) in.getInt();
+    myGRP0 = (uInt8) in.getInt();
+    myGRP1 = (uInt8) in.getInt();
+    myDGRP0 = (uInt8) in.getInt();
+    myDGRP1 = (uInt8) in.getInt();
     myENAM0 = in.getBool();
     myENAM1 = in.getBool();
     myENABL = in.getBool();
     myDENABL = in.getBool();
-    myHMP0 = (Int8) in.getLong();
-    myHMP1 = (Int8) in.getLong();
-    myHMM0 = (Int8) in.getLong();
-    myHMM1 = (Int8) in.getLong();
-    myHMBL = (Int8) in.getLong();
+    myHMP0 = (Int8) in.getInt();
+    myHMP1 = (Int8) in.getInt();
+    myHMM0 = (Int8) in.getInt();
+    myHMM1 = (Int8) in.getInt();
+    myHMBL = (Int8) in.getInt();
     myVDELP0 = in.getBool();
     myVDELP1 = in.getBool();
     myVDELBL = in.getBool();
     myRESMP0 = in.getBool();
     myRESMP1 = in.getBool();
-    myCollision = (uInt16) in.getLong();
-    myPOSP0 = (Int16) in.getLong();
-    myPOSP1 = (Int16) in.getLong();
-    myPOSM0 = (Int16) in.getLong();
-    myPOSM1 = (Int16) in.getLong();
-    myPOSBL = (Int16) in.getLong();
+    myCollision = (uInt16) in.getInt();
+    myPOSP0 = (Int16) in.getInt();
+    myPOSP1 = (Int16) in.getInt();
+    myPOSM0 = (Int16) in.getInt();
+    myPOSM1 = (Int16) in.getInt();
+    myPOSBL = (Int16) in.getInt();
 
-    myCurrentGRP0 = (uInt8) in.getLong();
-    myCurrentGRP1 = (uInt8) in.getLong();
+    myCurrentGRP0 = (uInt8) in.getInt();
+    myCurrentGRP1 = (uInt8) in.getInt();
 
 // pointers
 //  myCurrentBLMask = ourBallMaskTable[0][0];
@@ -463,13 +469,13 @@ bool TIA::load(Deserializer& in)
 //  myCurrentP1Mask = ourPlayerMaskTable[0][0][0];
 //  myCurrentPFMask = ourPlayfieldTable[0];
 
-    myLastHMOVEClock = (Int32) in.getLong();
+    myLastHMOVEClock = (Int32) in.getInt();
     myHMOVEBlankEnabled = in.getBool();
     myM0CosmicArkMotionEnabled = in.getBool();
-    myM0CosmicArkCounter = (uInt32) in.getLong();
+    myM0CosmicArkCounter = (uInt32) in.getInt();
 
     myDumpEnabled = in.getBool();
-    myDumpDisabledCycle = (Int32) in.getLong();
+    myDumpDisabledCycle = (Int32) in.getInt();
 
     // Load the sound sample stuff ...
     mySound->load(in);
@@ -511,12 +517,18 @@ void TIA::update()
   uInt32 totalClocks = (mySystem->cycles() * 3) - myClockWhenFrameStarted;
   myCurrentScanline = totalClocks / 228;
 
-  if(!myPartialFrameFlag)
+  if(myPartialFrameFlag) {
+    // grey out old frame contents
+    if(!myFrameGreyed) greyOutFrame();
+    myFrameGreyed = true;
+  } else {
     endFrame();
+  }
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-inline void TIA::startFrame() {
+inline void TIA::startFrame()
+{
   // This stuff should only happen at the beginning of a new frame.
   uInt8* tmp = myCurrentFrameBuffer;
   myCurrentFrameBuffer = myPreviousFrameBuffer;
@@ -560,25 +572,30 @@ inline void TIA::startFrame() {
       myCOLUBK &= 0xfefefefe;
     }
   }   
+
+  myFrameGreyed = false;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-inline void TIA::endFrame() {
+inline void TIA::endFrame()
+{
   // This stuff should only happen at the end of a frame
   // Compute the number of scanlines in the frame
   myScanlineCountForLastFrame = myCurrentScanline;
 
   // Stats counters
   myFrameCounter++;
+
+  myFrameGreyed = false;
 }
 
+#ifdef DEVELOPER_SUPPORT
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void TIA::updateScanline()
 {
   // Start a new frame if the old one was finished
   if(!myPartialFrameFlag) {
     startFrame();
-	 myFrameGreyed = false;
   }
 
   // grey out old frame contents
@@ -607,11 +624,72 @@ void TIA::updateScanline()
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void TIA::updateScanlineByStep()
+{
+  // Start a new frame if the old one was finished
+  if(!myPartialFrameFlag) {
+    startFrame();
+  }
+
+  // grey out old frame contents
+  if(!myFrameGreyed) greyOutFrame();
+  myFrameGreyed = true;
+
+  // true either way:
+  myPartialFrameFlag = true;
+
+  int totalClocks = (mySystem->cycles() * 3) - myClockWhenFrameStarted;
+
+  // Update frame by one CPU instruction/color clock
+  mySystem->m6502().execute(1);
+  updateFrame(mySystem->cycles() * 3);
+
+  totalClocks = (mySystem->cycles() * 3) - myClockWhenFrameStarted;
+  myCurrentScanline = totalClocks / 228;
+
+  // if we finished the frame, get ready for the next one
+  if(!myPartialFrameFlag)
+    endFrame();
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void TIA::updateScanlineByTrace(int target)
+{
+  // Start a new frame if the old one was finished
+  if(!myPartialFrameFlag) {
+    startFrame();
+  }
+
+  // grey out old frame contents
+  if(!myFrameGreyed) greyOutFrame();
+  myFrameGreyed = true;
+
+  // true either way:
+  myPartialFrameFlag = true;
+
+  int totalClocks = (mySystem->cycles() * 3) - myClockWhenFrameStarted;
+
+  while(mySystem->m6502().getPC() != target)
+  {
+    mySystem->m6502().execute(1);
+    updateFrame(mySystem->cycles() * 3);
+  }
+
+  totalClocks = (mySystem->cycles() * 3) - myClockWhenFrameStarted;
+  myCurrentScanline = totalClocks / 228;
+
+  // if we finished the frame, get ready for the next one
+  if(!myPartialFrameFlag)
+    endFrame();
+}
+#endif
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 const uInt32* TIA::palette() const
 {
   // See which palette we should be using
   string type   = mySettings.getString("palette");
-  string format = myConsole.properties().get("Display.Format");
+  string format = myConsole.properties().get("Display.Format", true);
 
   if(type == "standard")
     return (format == "PAL") ? ourPALPalette : ourNTSCPalette;
@@ -1879,16 +1957,14 @@ inline void TIA::waitHorizontalSync()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void TIA::greyOutFrame()
 {
-	/*
-  for(int s = scanlines() + 1; s < 300; s++)
-    for(int i = 0; i < 160; i++)
-      myCurrentFrameBuffer[s * 160 + i] = 0;
-		*/
-  for(int s = scanlines(); s < 300; s++)
-	  for(int i = 0; i < 160; i++) {
-		  uInt8 tmp = myCurrentFrameBuffer[s * 160 + i] & 0x0f;
+  unsigned int c = scanlines();
+  if(c < myYStart) c = myYStart;
+
+  for(unsigned int s = c; s < (myHeight + myYStart); s++)
+	  for(unsigned int i = 0; i < 160; i++) {
+		  uInt8 tmp = myCurrentFrameBuffer[ (s - myYStart) * 160 + i] & 0x0f;
 		  tmp >>= 1;
-		  myCurrentFrameBuffer[s * 160 + i] = tmp;
+		  myCurrentFrameBuffer[ (s - myYStart) * 160 + i] = tmp;
 	  }
 
 }
@@ -3256,7 +3332,7 @@ const uInt32 TIA::ourPALPalette11[256] = {
   0x000000, 0x000000, 0x242424, 0x242424, 
   0x484848, 0x484848, 0x6d6d6d, 0x6d6d6d, 
   0x919191, 0x919191, 0xb6b6b6, 0xb6b6b6, 
-  0xdadada, 0xdadada, 0xffffff, 0xff4ffff  // FIXME - check this out
+  0xdadada, 0xdadada, 0xffffff, 0xff4ffff
 };
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

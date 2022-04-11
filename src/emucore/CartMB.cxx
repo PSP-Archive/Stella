@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: CartMB.cxx,v 1.6 2005/07/30 16:58:22 urchlay Exp $
+// $Id: CartMB.cxx,v 1.8 2005/12/17 01:23:07 stephena Exp $
 //============================================================================
 
 #include <assert.h>
@@ -108,6 +108,8 @@ bool CartridgeMB::patch(uInt16 address, uInt8 value)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void CartridgeMB::incbank()
 {
+  if(bankLocked) return;
+
   // Remember what bank we're in
   myCurrentBank ++;
   myCurrentBank &= 0x0F;
@@ -154,7 +156,7 @@ bool CartridgeMB::save(Serializer& out)
   {
     out.putString(cart);
 
-    out.putLong(myCurrentBank);
+    out.putInt(myCurrentBank);
   }
   catch(char *msg)
   {
@@ -180,7 +182,7 @@ bool CartridgeMB::load(Deserializer& in)
     if(in.getString() != cart)
       return false;
 
-    myCurrentBank = (uInt16) in.getLong();
+    myCurrentBank = (uInt16) in.getInt();
   }
   catch(char *msg)
   {

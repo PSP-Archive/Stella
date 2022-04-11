@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Widget.cxx,v 1.34 2005/08/31 19:15:10 stephena Exp $
+// $Id: Widget.cxx,v 1.40 2005/12/21 01:50:16 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
@@ -28,18 +28,19 @@
 #include "bspf.hxx"
 #include "GuiUtils.hxx"
 #include "Widget.hxx"
+#include "EditableWidget.hxx"
 
 //static int COUNT = 0;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Widget::Widget(GuiObject* boss, int x, int y, int w, int h)
-    : GuiObject(boss->instance(), boss->parent(), x, y, w, h),
-      _type(0),
-      _boss(boss),
-      _id(-1),
-      _flags(0),
-      _hasFocus(false),
-      _color(kTextColor)
+  : GuiObject(boss->instance(), boss->parent(), x, y, w, h),
+    _type(0),
+    _boss(boss),
+    _id(-1),
+    _flags(0),
+    _hasFocus(false),
+    _color(kTextColor)
 {
   // Insert into the widget list of the boss
   _next = _boss->_firstWidget;
@@ -138,6 +139,16 @@ void Widget::lostFocus()
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+GUI::Rect Widget::getRect() const
+{
+  int x = getAbsX() - 1,  y = getAbsY() - 1,
+      w = getWidth() + 2, h = getHeight() + 2;
+
+  GUI::Rect r(x, y, x+w, y+h);
+  return r;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void Widget::setEnabled(bool e)
 {
   if(e)
@@ -216,8 +227,9 @@ Widget* Widget::setFocusForChain(GuiObject* boss, WidgetArray& arr,
     if(wid == tmp)
       pos = i;
 
-    int x = tmp->getAbsX() - 1,  y = tmp->getAbsY() - 1,
-        w = tmp->getWidth() + 2, h = tmp->getHeight() + 2;
+    GUI::Rect rect = tmp->getRect();
+    int x = rect.left,    y = rect.top,
+        w = rect.width(), h = rect.height();
 
     // First clear area surrounding all widgets
     if(tmp->_hasFocus)
@@ -225,6 +237,7 @@ Widget* Widget::setFocusForChain(GuiObject* boss, WidgetArray& arr,
       tmp->lostFocus();
       if(!(tmp->_flags & WIDGET_NODRAW_FOCUS))
         fb.frameRect(x, y, w, h, kBGColor);
+
       tmp->setDirty(); tmp->draw();
       fb.addDirtyRect(x, y, w, h);
     }
@@ -257,8 +270,9 @@ Widget* Widget::setFocusForChain(GuiObject* boss, WidgetArray& arr,
 
   // Now highlight the active widget
   tmp = arr[pos];
-  int x = tmp->getAbsX() - 1,  y = tmp->getAbsY() - 1,
-      w = tmp->getWidth() + 2, h = tmp->getHeight() + 2;
+  GUI::Rect rect = tmp->getRect();
+  int x = rect.left,    y = rect.top,
+      w = rect.width(), h = rect.height();
 
   tmp->receivedFocus();
   if(!(tmp->_flags & WIDGET_NODRAW_FOCUS))
@@ -319,10 +333,11 @@ void StaticTextWidget::drawWidget(bool hilite)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ButtonWidget::ButtonWidget(GuiObject *boss, int x, int y, int w, int h,
                            const string& label, int cmd, uInt8 hotkey)
-    : StaticTextWidget(boss, x, y, w, h, label, kTextAlignCenter),
-      CommandSender(boss),
-	  _cmd(cmd),
-      _hotkey(hotkey)
+  : StaticTextWidget(boss, x, y, w, h, label, kTextAlignCenter),
+    CommandSender(boss),
+    _cmd(cmd),
+    _editable(false),
+    _hotkey(hotkey)
 {
   _flags = WIDGET_ENABLED | WIDGET_BORDER | WIDGET_CLEARBG;
   _type = kButtonWidget;
@@ -343,6 +358,30 @@ void ButtonWidget::handleMouseLeft(int button)
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+bool ButtonWidget::handleKeyDown(int ascii, int keycode, int modifiers)
+{
+  // (De)activate with space or return
+  switch(ascii)
+  {
+    case '\n':  // enter/return
+    case '\r':
+    case ' ' :  // space
+      // Simulate mouse event
+      handleMouseUp(0, 0, 1, 0);
+      return true;
+    default:
+      return false;
+  }
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void ButtonWidget::handleJoyDown(int stick, int button)
+{
+  // Any button activates the button
+  handleMouseUp(0, 0, 1, 0);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void ButtonWidget::handleMouseUp(int x, int y, int button, int clickCount)
 {
   if(isEnabled() && x >= 0 && x < _w && y >= 0 && y < _h)
@@ -350,6 +389,22 @@ void ButtonWidget::handleMouseUp(int x, int y, int button, int clickCount)
     clearFlags(WIDGET_HILITED);
     sendCommand(_cmd, 0, _id);
   }
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+bool ButtonWidget::wantsFocus()
+{
+  return _editable;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void ButtonWidget::setEditable(bool editable)
+{
+  _editable = editable;
+  if(_editable)
+    setFlags(WIDGET_RETAIN_FOCUS);
+  else
+    clearFlags(WIDGET_RETAIN_FOCUS);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -412,21 +467,18 @@ void CheckboxWidget::handleMouseUp(int x, int y, int button, int clickCount)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool CheckboxWidget::handleKeyDown(int ascii, int keycode, int modifiers)
 {
-  bool handled = false;
-
   // (De)activate with space or return
-  switch(keycode)
+  switch(ascii)
   {
     case '\n':  // enter/return
     case '\r':
     case ' ' :  // space
       // Simulate mouse event
       handleMouseUp(0, 0, 1, 0);
-      handled = true;
-      break;
+      return true;
+    default:
+      return false;
   }
-
-  return handled;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

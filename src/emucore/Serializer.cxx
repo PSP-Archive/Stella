@@ -13,22 +13,14 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Serializer.cxx,v 1.5 2005/06/16 01:11:28 stephena Exp $
+// $Id: Serializer.cxx,v 1.9 2005/12/29 21:16:28 stephena Exp $
 //============================================================================
-
-#include <iostream>
-#include <fstream>
-#include <string>
 
 #include "Serializer.hxx"
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Serializer::Serializer(void)
 {
-  TruePattern = 0xfab1fab2;
-  FalsePattern = 0xbad1bad2;
-
-  myStream = (ofstream*) 0;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -41,29 +33,33 @@ Serializer::~Serializer(void)
 bool Serializer::open(const string& fileName)
 {
   close();
-  myStream = new ofstream(fileName.c_str(), ios::out | ios::binary);
+  myStream.open(fileName.c_str(), ios::out | ios::binary);
 
-  return (myStream && myStream->is_open());
+  return isOpen();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void Serializer::close(void)
 {
-  if(myStream)
-  {
-    if(myStream->is_open())
-      myStream->close();
-
-    delete myStream;
-    myStream = (ofstream*) 0;
-  }
+  myStream.close();
+  myStream.clear();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void Serializer::putLong(long value)
+bool Serializer::isOpen(void)
 {
-  myStream->write(reinterpret_cast<char *> (&value), sizeof (long));
-  if(myStream->bad())
+  return myStream.is_open();
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void Serializer::putInt(int value)
+{
+  unsigned char buf[4];
+  for(int i = 0; i < 4; ++i)
+    buf[i] = (value >> (i<<3)) & 0xff;
+
+  myStream.write((char*)buf, 4);
+  if(myStream.bad())
     throw "Serializer: file write failed";
 }
 
@@ -71,19 +67,15 @@ void Serializer::putLong(long value)
 void Serializer::putString(const string& str)
 {
   int len = str.length();
-  putLong(len);
-  myStream->write(str.data(), len);
+  putInt(len);
+  myStream.write(str.data(), (streamsize)len);
 
-  if(myStream->bad())
+  if(myStream.bad())
     throw "Serializer: file write failed";
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void Serializer::putBool(bool b)
 {
-  long l = b ? TruePattern: FalsePattern;
-  putLong(l);
-
-  if(myStream->bad ())
-    throw "Serializer: file write failed";
+  putInt(b ? TruePattern: FalsePattern);
 }

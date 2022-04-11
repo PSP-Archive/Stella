@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Console.cxx,v 1.68 2005/08/30 17:51:26 stephena Exp $
+// $Id: Console.cxx,v 1.78 2005/12/23 20:48:50 stephena Exp $
 //============================================================================
 
 #include <assert.h>
@@ -32,7 +32,6 @@
 #include "Keyboard.hxx"
 #include "M6502Hi.hxx"
 #include "M6532.hxx"
-#include "MD5.hxx"
 #include "MediaSrc.hxx"
 #include "Paddles.hxx"
 #include "Props.hxx"
@@ -56,9 +55,15 @@
   #include "Debugger.hxx"
 #endif
 
+#ifdef CHEATCODE_SUPPORT
+  #include "CheatManager.hxx"
+#endif
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Console::Console(const uInt8* image, uInt32 size, OSystem* osystem)
-    : myOSystem(osystem)
+Console::Console(const uInt8* image, uInt32 size, const string& md5,
+                 OSystem* osystem)
+  : myOSystem(osystem),
+    myIsInitializedFlag(false)
 {
   myControllers[0] = 0;
   myControllers[1] = 0;
@@ -70,37 +75,37 @@ Console::Console(const uInt8* image, uInt32 size, OSystem* osystem)
   // Attach the event subsystem to the current console
   myEvent = myOSystem->eventHandler().event();
 
-  // Get the MD5 message-digest for the ROM image
-  string md5 = MD5(image, size);
-
   // Search for the properties based on MD5
   myOSystem->propSet().getMD5(md5, myProperties);
 
-  // Make sure the MD5 value of the cartridge is set in the properties
-  if(myProperties.get("Cartridge.MD5") == "")
-    myProperties.set("Cartridge.MD5", md5);
-
+#ifdef DEVELOPER_SUPPORT
   // A developer can override properties from the commandline
   setDeveloperProperties();
+#endif
+
+  // Make sure height is set properly for PAL ROM
+  if(myProperties.get("Display.Format", true) == "PAL")
+    if(myProperties.get("Display.Height") == "210")
+      myProperties.set("Display.Height", "250");
 
   // Setup the controllers based on properties
-  string left = myProperties.get("Controller.Left");
-  string right = myProperties.get("Controller.Right");
+  string left  = myProperties.get("Controller.Left", true);
+  string right = myProperties.get("Controller.Right", true);
 
   // Construct left controller
-  if(left == "Booster-Grip")
+  if(left == "BOOSTER-GRIP")
   {
     myControllers[0] = new BoosterGrip(Controller::Left, *myEvent);
   }
-  else if(left == "Driving")
+  else if(left == "DRIVING")
   {
     myControllers[0] = new Driving(Controller::Left, *myEvent);
   }
-  else if((left == "Keyboard") || (left == "Keypad"))
+  else if((left == "KEYBOARD") || (left == "KEYPAD"))
   {
     myControllers[0] = new Keyboard(Controller::Left, *myEvent);
   }
-  else if(left == "Paddles")
+  else if(left == "PADDLES")
   {
     myControllers[0] = new Paddles(Controller::Left, *myEvent);
   }
@@ -110,19 +115,19 @@ Console::Console(const uInt8* image, uInt32 size, OSystem* osystem)
   }
   
   // Construct right controller
-  if(right == "Booster-Grip")
+  if(right == "BOOSTER-GRIP")
   {
     myControllers[1] = new BoosterGrip(Controller::Right, *myEvent);
   }
-  else if(right == "Driving")
+  else if(right == "DRIVING")
   {
     myControllers[1] = new Driving(Controller::Right, *myEvent);
   }
-  else if((right == "Keyboard") || (right == "Keypad"))
+  else if((right == "KEYBOARD") || (right == "KEYPAD"))
   {
     myControllers[1] = new Keyboard(Controller::Right, *myEvent);
   }
-  else if(right == "Paddles")
+  else if(right == "PADDLES")
   {
     myControllers[1] = new Paddles(Controller::Right, *myEvent);
   }
@@ -147,6 +152,8 @@ Console::Console(const uInt8* image, uInt32 size, OSystem* osystem)
   TIA *tia = new TIA(*this, myOSystem->settings());
   tia->setSound(myOSystem->sound());
   Cartridge* cartridge = Cartridge::create(image, size, myProperties);
+  if(!cartridge)
+    return;
 
   mySystem->attach(m6502);
   mySystem->attach(m6532);
@@ -168,9 +175,10 @@ Console::Console(const uInt8* image, uInt32 size, OSystem* osystem)
   uInt32 framerate = myOSystem->settings().getInt("framerate");
   if(framerate == 0)
   {
-    if(myProperties.get("Display.Format") == "NTSC")
+    string s = myProperties.get("Display.Format", true);
+    if(s == "NTSC")
       framerate = 60;
-    else if(myProperties.get("Display.Format") == "PAL")
+    else if(s == "PAL")
       framerate = 50;
     else
       framerate = 60;
@@ -182,6 +190,19 @@ Console::Console(const uInt8* image, uInt32 size, OSystem* osystem)
   initializeVideo();
 
   // Initialize the sound interface.
+  // The # of channels can be overridden in the AudioDialog box or on
+  // the commandline, but it can't be saved.
+  uInt32 channels;
+  string s = myProperties.get("Cartridge.Sound", true);
+  if(s == "STEREO")
+    channels = 2;
+  else if(s == "MONO")
+    channels = 1;
+  else
+    channels = 1;
+
+  myOSystem->sound().close();
+  myOSystem->sound().setChannels(channels);
   myOSystem->sound().setFrameRate(framerate);
   myOSystem->sound().initialize();
 
@@ -197,6 +218,9 @@ Console::Console(const uInt8* image, uInt32 size, OSystem* osystem)
   myOSystem->debugger().setConsole(this);
   myOSystem->debugger().initialize();
 #endif
+
+  // If we get this far, the console must be valid
+  myIsInitializedFlag = true;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -210,6 +234,10 @@ Console::Console(const Console& console)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Console::~Console()
 {
+#ifdef CHEATCODE_SUPPORT
+  myOSystem->cheat().saveCheats(myProperties.get("Cartridge.MD5"));
+#endif
+
   delete mySystem;
   delete mySwitches;
   delete myControllers[0];
@@ -234,7 +262,7 @@ Console& Console::operator = (const Console&)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void Console::toggleFormat()
 {
-  string format = myProperties.get("Display.Format");
+  string format = myProperties.get("Display.Format", true);
   uInt32 framerate = 60;
 
   if(format == "NTSC")
@@ -254,7 +282,7 @@ void Console::toggleFormat()
 
   setPalette();
   myOSystem->setFramerate(framerate);
-//FIXME - should be change sound rate as well??
+  myOSystem->sound().setFrameRate(framerate);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -315,7 +343,7 @@ void Console::saveProperties(string filename, bool merge)
     if(myOSystem->propSet().merge(myProperties, filename))
       myOSystem->frameBuffer().showMessage("Properties merged");
     else
-      myOSystem->frameBuffer().showMessage("Properties not merged");
+      myOSystem->frameBuffer().showMessage("Error merging properties");
   }
   else  // Save to the specified file directly
   {
@@ -329,7 +357,7 @@ void Console::saveProperties(string filename, bool merge)
     }
     else
     {
-      myOSystem->frameBuffer().showMessage("Properties not saved");
+      myOSystem->frameBuffer().showMessage("Error saving properties");
     }
   }
 }
@@ -358,6 +386,16 @@ void Console::setPalette()
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void Console::setChannels(int channels)
+{
+  myOSystem->sound().setChannels(channels);
+
+  // Save to properties
+  string sound = channels == 2 ? "Stereo" : "Mono";
+  myProperties.set("Cartridge.Sound", sound);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 /* Original frying research and code by Fred Quimby.
    I've tried the following variations on this code:
    - Both OR and Exclusive OR instead of AND. This generally crashes the game
@@ -380,7 +418,7 @@ void Console::setPalette()
 void Console::fry()
 {
   for (int ZPmem=0; ZPmem<0x100; ZPmem += rand() % 4)
-  mySystem->poke(ZPmem, mySystem->peek(ZPmem) & (uInt8)rand() % 256);
+    mySystem->poke(ZPmem, mySystem->peek(ZPmem) & (uInt8)rand() % 256);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -611,10 +649,6 @@ void Console::setDeveloperProperties()
   s = settings.getString("height");
   if(s != "")
     myProperties.set("Display.Height", s);
-
-  s = settings.getString("cpu");
-  if(s != "")
-    myProperties.set("Emulation.CPU", s);
 
   s = settings.getString("hmove");
   if(s != "")

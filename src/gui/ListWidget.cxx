@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: ListWidget.cxx,v 1.29 2005/08/26 16:44:17 stephena Exp $
+// $Id: ListWidget.cxx,v 1.38 2006/01/04 01:24:17 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
@@ -73,9 +73,9 @@ void ListWidget::setSelected(int item)
 {
   assert(item >= -1 && item < (int)_list.size());
 
-  if (isEnabled() && _selectedItem != item)
+  if(isEnabled())
   {
-    if (_editMode)
+    if(_editMode)
       abortEditMode();
 
     _selectedItem = item;
@@ -91,14 +91,12 @@ void ListWidget::setHighlighted(int item)
 {
   assert(item >= -1 && item < (int)_list.size());
 
-  if (isEnabled() && _highlightedItem != item)
+  if(isEnabled())
   {
-    if (_editMode)
+    if(_editMode)
       abortEditMode();
 
     _highlightedItem = item;
-    // FIXME - don't know if we need to send a signal
-    //sendCommand(kListSelectionChangedCmd, _selectedItem, _id);
 
     // Only scroll the list if we're about to pass the page boundary
     if(_currentPos == 0)
@@ -124,8 +122,6 @@ void ListWidget::scrollTo(int item)
     _currentPos = item;
     scrollBarRecalc();
   }
-
-  setDirty(); draw();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -137,7 +133,10 @@ void ListWidget::recalc()
     _currentPos = size - 1;
   if (_currentPos < 0)
     _currentPos = 0;
-  _selectedItem = -1;
+
+  if(_selectedItem < 0 || _selectedItem >= size)
+    _selectedItem = 0;
+
   _editMode = false;
   scrollBarRecalc();
 }
@@ -149,6 +148,9 @@ void ListWidget::scrollBarRecalc()
   _scrollBar->_entriesPerPage = _rows;
   _scrollBar->_currentPos     = _currentPos;
   _scrollBar->recalc();
+
+  setDirty(); draw();
+  sendCommand(kListScrolledCmd, _currentPos, _id);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -217,9 +219,8 @@ static bool matchingCharsIgnoringCase(string s, string pattern)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool ListWidget::handleKeyDown(int ascii, int keycode, int modifiers)
 {
-  // Ignore all mod keys
-  if(instance()->eventHandler().kbdControl(modifiers) ||
-     instance()->eventHandler().kbdAlt(modifiers))
+  // Ignore all Alt-mod keys
+  if(instance()->eventHandler().kbdAlt(modifiers))
     return true;
 
   bool handled = true;
@@ -263,7 +264,7 @@ bool ListWidget::handleKeyDown(int ascii, int keycode, int modifiers)
   else
   {
     // not editmode
-    switch (keycode)
+    switch (ascii)
     {
       case ' ':  // space
         // Snap list back to currently highlighted line
@@ -286,33 +287,33 @@ bool ListWidget::handleKeyDown(int ascii, int keycode, int modifiers)
         }
         break;
 
-      case 256+17:  // up arrow
+      case kCursorUp:
         if (_selectedItem > 0)
           _selectedItem--;
         break;
 
-      case 256+18:  // down arrow
+      case kCursorDown:
         if (_selectedItem < (int)_list.size() - 1)
           _selectedItem++;
         break;
 
-      case 256+24:  // pageup
+      case kCursorPgUp:
         _selectedItem -= _rows - 1;
         if (_selectedItem < 0)
           _selectedItem = 0;
         break;
 
-      case 256+25:	// pagedown
+      case kCursorPgDn:
         _selectedItem += _rows - 1;
         if (_selectedItem >= (int)_list.size() )
           _selectedItem = _list.size() - 1;
         break;
 
-      case 256+22:  // home
+      case kCursorHome:
         _selectedItem = 0;
         break;
 
-      case 256+23:  // end
+      case kCursorEnd:
         _selectedItem = _list.size() - 1;
         break;
 
@@ -366,22 +367,29 @@ void ListWidget::handleCommand(CommandSender* sender, int cmd, int data, int id)
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+GUI::Rect ListWidget::getRect() const
+{
+  // Account for attached scrollbar when calculating width
+  int x = getAbsX() - 1,  y = getAbsY() - 1,
+      w = getWidth() + kScrollBarWidth + 2, h = getHeight() + 2;
+
+  GUI::Rect r(x, y, x+w, y+h);
+  return r;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void ListWidget::scrollToCurrent(int item)
 {
-  bool scrolled = false;
-
   // Only do something if the current item is not in our view port
   if (item < _currentPos)
   {
     // it's above our view
     _currentPos = item;
-    scrolled = true;
   }
   else if (item >= _currentPos + _rows )
   {
     // it's below our view
     _currentPos = item - _rows + 1;
-    scrolled = true;
   }
 
   if (_currentPos < 0 || _rows > (int)_list.size())
@@ -389,12 +397,13 @@ void ListWidget::scrollToCurrent(int item)
   else if (_currentPos + _rows > (int)_list.size())
     _currentPos = _list.size() - _rows;
 
+  int oldScrollPos = _scrollBar->_currentPos;
   _scrollBar->_currentPos = _currentPos;
   _scrollBar->recalc();
 
   setDirty(); draw();
 
-  if(scrolled)
+  if(oldScrollPos != _currentPos)
     sendCommand(kListScrolledCmd, _currentPos, _id);
 }
 

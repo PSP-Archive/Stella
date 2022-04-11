@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: CartF4.cxx,v 1.5 2005/07/30 16:58:22 urchlay Exp $
+// $Id: CartF4.cxx,v 1.7 2005/12/17 01:23:07 stephena Exp $
 //============================================================================
 
 #include <assert.h>
@@ -113,6 +113,8 @@ bool CartridgeF4::patch(uInt16 address, uInt8 value)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void CartridgeF4::bank(uInt16 bank)
 { 
+  if(bankLocked) return;
+
   // Remember what bank we're in
   myCurrentBank = bank;
   uInt16 offset = myCurrentBank * 4096;
@@ -151,7 +153,7 @@ bool CartridgeF4::save(Serializer& out)
   try
   {
     out.putString(cart);
-    out.putLong(myCurrentBank);
+    out.putInt(myCurrentBank);
   }
   catch(char* msg)
   {
@@ -179,7 +181,7 @@ bool CartridgeF4::load(Deserializer& in)
       return false;
     }
 
-    myCurrentBank = (uInt16)in.getLong();
+    myCurrentBank = (uInt16)in.getInt();
   }
   catch(char* msg)
   {

@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: ListWidget.hxx,v 1.12 2005/08/26 16:44:17 stephena Exp $
+// $Id: ListWidget.hxx,v 1.15 2006/01/04 01:24:17 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
@@ -48,6 +48,9 @@ class ListWidget : public EditableWidget
                int x, int y, int w, int h);
     virtual ~ListWidget();
 
+    int rows() const        { return _rows; }
+    int currentPos() const  { return _currentPos; }
+
     int getSelected() const        { return _selectedItem; }
     void setSelected(int item);
 
@@ -66,7 +69,8 @@ class ListWidget : public EditableWidget
     virtual bool handleKeyUp(int ascii, int keycode, int modifiers);
     virtual void handleCommand(CommandSender* sender, int cmd, int data, int id);
 
-    virtual bool wantsFocus() { return true; }
+    virtual GUI::Rect getRect() const;
+    virtual bool wantsFocus() { return !isSticky(); }
 
     void startEditMode();
     void endEditMode();

@@ -13,20 +13,25 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: DebuggerParser.cxx,v 1.76 2005/08/20 18:19:52 urchlay Exp $
+// $Id: DebuggerParser.cxx,v 1.89 2005/12/19 02:19:48 stephena Exp $
 //============================================================================
 
 #include "bspf.hxx"
 #include <iostream>
 #include <fstream>
+
+#include "Dialog.hxx"
 #include "Debugger.hxx"
 #include "CpuDebug.hxx"
 #include "DebuggerParser.hxx"
 #include "YaccParser.hxx"
 #include "M6502.hxx"
 #include "Expression.hxx"
-#include "CheetahCheat.hxx"
-#include "Cheat.hxx"
+#include "RomWidget.hxx"
+
+#ifdef CHEATCODE_SUPPORT
+  #include "CheatManager.hxx"
+#endif
 
 #include "DebuggerParser.hxx"
 
@@ -34,6 +39,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"a",
 		"Set Accumulator to value xx",
+		true,
 		true,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeA
@@ -43,6 +49,7 @@ Command DebuggerParser::commands[] = {
 		"bank",
 		"Show # of banks (with no args), Switch to bank (with 1 arg)",
 		false,
+		true,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeBank
 	},
@@ -50,6 +57,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"base",
 		"Set default base (hex, dec, or bin)",
+		true,
 		true,
 		{ kARG_BASE_SPCL, kARG_END_ARGS },
 		&DebuggerParser::executeBase
@@ -59,6 +67,7 @@ Command DebuggerParser::commands[] = {
 		"break",
 		"Set/clear breakpoint at address (default: current pc)",
 		false,
+		true,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeBreak
 	},
@@ -67,6 +76,7 @@ Command DebuggerParser::commands[] = {
 		"breakif",
 		"Set breakpoint on condition",
 		true,
+		false,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeBreakif
 	},
@@ -75,23 +85,27 @@ Command DebuggerParser::commands[] = {
 		"c",
 		"Carry Flag: set (to 0 or 1), or toggle (no arg)",
 		false,
+		true,
 		{ kARG_BOOL, kARG_END_ARGS },
 		&DebuggerParser::executeC
 	},
 
+#ifdef CHEATCODE_SUPPORT
 	{
-		"cheetah",
-		"Use Cheetah cheat code (see http://members.cox.net/rcolbert/)",
+		"cheat",
+		"Use a cheat code (see Stella manual for cheat types)",
 		false,
-		// lame: accept 0-4 args instead of inventing a kARG_MULTI_LABEL type
-		{ kARG_LABEL, kARG_LABEL, kARG_LABEL, kARG_LABEL, kARG_END_ARGS },
-		&DebuggerParser::executeCheetah
+		false,
+		{ kARG_LABEL, kARG_END_ARGS },
+		&DebuggerParser::executeCheat
 	},
+#endif
 
 	{
 		"clearbreaks",
 		"Clear all breakpoints",
 		false,
+		true,
 		{ kARG_END_ARGS },
 		&DebuggerParser::executeClearbreaks
 	},
@@ -99,6 +113,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"cleartraps",
 		"Clear all traps",
+		false,
 		false,
 		{ kARG_END_ARGS },
 		&DebuggerParser::executeCleartraps
@@ -108,6 +123,7 @@ Command DebuggerParser::commands[] = {
 		"clearwatches",
 		"Clear all watches",
 		false,
+		false,
 		{ kARG_END_ARGS },
 		&DebuggerParser::executeClearwatches
 	},
@@ -116,6 +132,7 @@ Command DebuggerParser::commands[] = {
 		"colortest",
 		"Color Test",
 		true,
+		false,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeColortest
 	},
@@ -124,6 +141,7 @@ Command DebuggerParser::commands[] = {
 		"d",
 		"Decimal Flag: set (to 0 or 1), or toggle (no arg)",
 		false,
+		true,
 		{ kARG_BOOL, kARG_END_ARGS },
 		&DebuggerParser::executeD
 	},
@@ -131,6 +149,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"define",
 		"Define label",
+		true,
 		true,
 		{ kARG_LABEL, kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeDefine
@@ -140,6 +159,7 @@ Command DebuggerParser::commands[] = {
 		"delbreakif",
 		"Delete conditional break created with breakif",
 		true,
+		false,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeDelbreakif
 	},
@@ -148,6 +168,7 @@ Command DebuggerParser::commands[] = {
 		"delwatch",
 		"Delete watch",
 		true,
+		false,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeDelwatch
 	},
@@ -155,6 +176,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"disasm",
 		"Disassemble from address (default=pc)",
+		false,
 		false,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeDisasm
@@ -164,6 +186,7 @@ Command DebuggerParser::commands[] = {
 		"dump",
 		"Dump 128 bytes of memory at address",
 		true,
+		false,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeDump
 	},
@@ -171,6 +194,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"exec",
 		"Execute script file",
+		true,
 		true,
 		{ kARG_FILE, kARG_END_ARGS },
 		&DebuggerParser::executeExec
@@ -180,6 +204,7 @@ Command DebuggerParser::commands[] = {
 		"frame",
 		"Advance emulation by xx frames (default=1)",
 		false,
+		true,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeFrame
 	},
@@ -187,6 +212,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"function",
 		"Define expression as a function for later use",
+		false,
 		false,
 		{ kARG_LABEL, kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeFunction
@@ -196,6 +222,7 @@ Command DebuggerParser::commands[] = {
 		"height",
 		"Change height of debugger window",
 		true,
+		false,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeHeight
 	},
@@ -203,6 +230,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"help",
 		"This cruft",
+		false,
 		false,
 		{ kARG_END_ARGS },
 		&DebuggerParser::executeHelp
@@ -212,6 +240,7 @@ Command DebuggerParser::commands[] = {
 		"list",
 		"List source (if loaded with loadlst)",
 		false,
+		false,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeList
 	},
@@ -219,6 +248,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"listbreaks",
 		"List breakpoints",
+		false,
 		false,
 		{ kARG_END_ARGS },
 		&DebuggerParser::executeListbreaks
@@ -228,6 +258,7 @@ Command DebuggerParser::commands[] = {
 		"listtraps",
 		"List traps",
 		false,
+		false,
 		{ kARG_END_ARGS },
 		&DebuggerParser::executeListtraps
 	},
@@ -235,6 +266,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"listwatches",
 		"List watches",
+		false,
 		false,
 		{ kARG_END_ARGS },
 		&DebuggerParser::executeListwatches
@@ -244,6 +276,7 @@ Command DebuggerParser::commands[] = {
 		"loadstate",
 		"Load emulator state (0-9)",
 		true,
+		true,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeLoadstate
 	},
@@ -251,6 +284,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"loadlist",
 		"Load DASM listing file",
+		true,
 		true,
 		{ kARG_FILE, kARG_END_ARGS },
 		&DebuggerParser::executeLoadlist
@@ -260,6 +294,7 @@ Command DebuggerParser::commands[] = {
 		"loadsym",
 		"Load symbol file",
 		true,
+		true,
 		{ kARG_FILE, kARG_END_ARGS },
 		&DebuggerParser::executeLoadsym
 	},
@@ -268,6 +303,7 @@ Command DebuggerParser::commands[] = {
 		"n",
 		"Negative Flag: set (to 0 or 1), or toggle (no arg)",
 		false,
+		true,
 		{ kARG_BOOL, kARG_END_ARGS },
 		&DebuggerParser::executeN
 	},
@@ -275,6 +311,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"pc",
 		"Set Program Counter to address",
+		true,
 		true,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executePc
@@ -284,6 +321,7 @@ Command DebuggerParser::commands[] = {
 		"poke",
 		"Set address to value. Can give multiple values (for address+1, etc)",
 		true,
+		true,
 		{ kARG_WORD, kARG_MULTI_BYTE },
 		&DebuggerParser::executeRam
 	},
@@ -292,6 +330,7 @@ Command DebuggerParser::commands[] = {
 		"print",
 		"Evaluate and print expression in hex/dec/binary",
 		true,
+		false,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executePrint
 	},
@@ -300,6 +339,7 @@ Command DebuggerParser::commands[] = {
 		"ram",
 		"Show RAM contents (no args), or set address xx to value yy",
 		false,
+		true,
 		{ kARG_WORD, kARG_MULTI_BYTE },
 		&DebuggerParser::executeRam
 	},
@@ -308,6 +348,7 @@ Command DebuggerParser::commands[] = {
 		"reload",
 		"Reload ROM and symbol file",
 		false,
+		true,
 		{ kARG_END_ARGS },
 		&DebuggerParser::executeReload
 	},
@@ -316,6 +357,7 @@ Command DebuggerParser::commands[] = {
 		"reset",
 		"Reset 6507 to init vector (does not reset TIA, RIOT)",
 		false,
+		true,
 		{ kARG_END_ARGS },
 		&DebuggerParser::executeReset
 	},
@@ -323,6 +365,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"riot",
 		"Show RIOT timer/input status",
+		false,
 		false,
 		{ kARG_END_ARGS },
 		&DebuggerParser::executeRiot
@@ -332,6 +375,7 @@ Command DebuggerParser::commands[] = {
 		"rom",
 		"Change ROM contents",
 		true,
+		true,
 		{ kARG_WORD, kARG_MULTI_BYTE },
 		&DebuggerParser::executeRom
 	},
@@ -339,6 +383,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"run",
 		"Exit debugger, return to emulator",
+		false,
 		false,
 		{ kARG_END_ARGS },
 		&DebuggerParser::executeRun
@@ -348,6 +393,7 @@ Command DebuggerParser::commands[] = {
 		"runto",
 		"Run until first occurrence of string in disassembly",
 		false,
+		true,
 		{ kARG_LABEL, kARG_END_ARGS },
 		&DebuggerParser::executeRunTo
 	},
@@ -355,6 +401,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"s",
 		"Set Stack Pointer to value xx",
+		true,
 		true,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeS
@@ -364,6 +411,7 @@ Command DebuggerParser::commands[] = {
 		"save",
 		"Save breaks, watches, traps as a .stella script file",
 		true,
+		false,
 		{ kARG_FILE, kARG_END_ARGS },
 		&DebuggerParser::executeSave
 	},
@@ -372,6 +420,7 @@ Command DebuggerParser::commands[] = {
 		"saverom",
 		"Save (possibly patched) ROM to file",
 		true,
+		false,
 		{ kARG_FILE, kARG_END_ARGS },
 		&DebuggerParser::executeSaverom
 	},
@@ -380,6 +429,7 @@ Command DebuggerParser::commands[] = {
 		"saveses",
 		"Save console session to file",
 		true,
+		false,
 		{ kARG_FILE, kARG_END_ARGS },
 		&DebuggerParser::executeSaveses
 	},
@@ -388,6 +438,7 @@ Command DebuggerParser::commands[] = {
 		"savestate",
 		"Save emulator state (valid args 0-9)",
 		true,
+		false,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeSavestate
 	},
@@ -396,6 +447,7 @@ Command DebuggerParser::commands[] = {
 		"savesym",
 		"Save symbols to file",
 		true,
+		false,
 		{ kARG_FILE, kARG_END_ARGS },
 		&DebuggerParser::executeSavesym
 	},
@@ -404,6 +456,7 @@ Command DebuggerParser::commands[] = {
 		"scanline",
 		"Advance emulation by xx scanlines (default=1)",
 		false,
+		true,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeScanline
 	},
@@ -412,6 +465,7 @@ Command DebuggerParser::commands[] = {
 		"step",
 		"Single step CPU (optionally, with count)",
 		false,
+		true,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeStep
 	},
@@ -419,6 +473,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"tia",
 		"Show TIA state (NOT FINISHED YET)",
+		false,
 		false,
 		{ kARG_END_ARGS },
 		&DebuggerParser::executeTia
@@ -428,6 +483,7 @@ Command DebuggerParser::commands[] = {
 		"trace",
 		"Single step CPU (optionally, with count), subroutines count as one instruction",
 		false,
+		true,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeTrace
 	},
@@ -436,6 +492,7 @@ Command DebuggerParser::commands[] = {
 		"trap",
 		"Trap read and write accesses to address",
 		true,
+		false,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeTrap
 	},
@@ -444,6 +501,7 @@ Command DebuggerParser::commands[] = {
 		"trapread",
 		"Trap read accesses to address",
 		true,
+		false,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeTrapread
 	},
@@ -452,6 +510,7 @@ Command DebuggerParser::commands[] = {
 		"trapwrite",
 		"Trap write accesses to address",
 		true,
+		false,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeTrapwrite
 	},
@@ -459,6 +518,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"undef",
 		"Undefine label (if defined)",
+		true,
 		true,
 		{ kARG_LABEL, kARG_END_ARGS },
 		&DebuggerParser::executeUndef
@@ -468,6 +528,7 @@ Command DebuggerParser::commands[] = {
 		"v",
 		"Overflow Flag: set (to 0 or 1), or toggle (no arg)",
 		false,
+		true,
 		{ kARG_BOOL, kARG_END_ARGS },
 		&DebuggerParser::executeV
 	},
@@ -476,6 +537,7 @@ Command DebuggerParser::commands[] = {
 		"watch",
 		"Print contents of address before every prompt",
 		true,
+		false,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeWatch
 	},
@@ -483,6 +545,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"x",
 		"Set X Register to value xx",
+		true,
 		true,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeX
@@ -492,6 +555,7 @@ Command DebuggerParser::commands[] = {
 		"y",
 		"Set Y Register to value xx",
 		true,
+		true,
 		{ kARG_WORD, kARG_END_ARGS },
 		&DebuggerParser::executeY
 	},
@@ -500,6 +564,7 @@ Command DebuggerParser::commands[] = {
 		"z",
 		"Zero Flag: set (to 0 or 1), or toggle (no arg)",
 		false,
+		true,
 		{ kARG_BOOL, kARG_END_ARGS },
 		&DebuggerParser::executeZ
 	},
@@ -507,6 +572,7 @@ Command DebuggerParser::commands[] = {
 	{
 		"",
 		"",
+		false,
 		false,
 		{ kARG_END_ARGS },
 		NULL
@@ -865,7 +931,7 @@ string DebuggerParser::eval() {
 }
 
 string DebuggerParser::showWatches() {
-	string ret = "\n";
+	string ret;
 	char buf[10];
 
 	for(unsigned int i=0; i<watches.size(); i++) {
@@ -883,14 +949,12 @@ string DebuggerParser::showWatches() {
 				ret += buf;
 				ret += ": " + argStrings[0] + "\n";
 			} else {
-				ret += "  watch #";
+				ret += " watch #";
 				ret += buf;
 				ret += " (" + argStrings[0] + ") -> " + eval() + "\n";
 			}
 		}
 	}
-	// get rid of trailing \n
-	ret.erase(ret.length()-1, 1);
 	return ret;
 }
 
@@ -938,85 +1002,114 @@ string DebuggerParser::trapStatus(int addr) {
 	return result;
 }
 
-bool DebuggerParser::validateArgs(int cmd) {
-	// cerr << "entering validateArgs(" << cmd << ")" << endl;
-	bool required = commands[cmd].parmsRequired;
-	parameters *p = commands[cmd].parms;
+bool DebuggerParser::validateArgs(int cmd)
+{
+  // cerr << "entering validateArgs(" << cmd << ")" << endl;
+  bool required = commands[cmd].parmsRequired;
+  parameters *p = commands[cmd].parms;
 
-	if(argCount == 0) {
-		if(required) {
-			commandResult = red("missing required argument(s)");
-			return false; // needed args. didn't get 'em.
-		} else {
-			return true;  // no args needed, no args got
-		}
-	}
+  if(argCount == 0)
+  {
+    if(required)
+    {
+      commandResult = red("missing required argument(s)");
+      return false; // needed args. didn't get 'em.
+    }
+    else
+      return true;  // no args needed, no args got
+  }
 
-	int curCount = 0;
+  // Figure out how many arguments are required by the command
+  int count = 0, argRequiredCount = 0;
+  while(*p != kARG_END_ARGS && *p != kARG_MULTI_BYTE)
+  {
+    count++;
+    *p++;
+  }
 
-	do {
-		if(argCount == curCount) {
-			return true;
-		}
+  // Evil hack: some commands intentionally take multiple arguments
+  // In this case, the required number of arguments is unbounded
+  argRequiredCount = (*p == kARG_END_ARGS) ? count : argCount;
 
-		int curArgInt = args[curCount];
-		string curArgStr = argStrings[curCount];
+  p = commands[cmd].parms;
+  int curCount = 0;
 
-		switch(*p) {
-			case kARG_WORD:
-				if(curArgInt < 0 || curArgInt > 0xffff) {
-					commandResult = red("invalid word argument (must be 0-$ffff)");
-					return false;
-				}
-				break;
+  do {
+    if(curCount >= argCount)
+      break;
 
-			case kARG_BYTE:
-				if(curArgInt < 0 || curArgInt > 0xff) {
-					commandResult = red("invalid byte argument (must be 0-$ff)");
-					return false;
-				}
-				break;
+    int curArgInt     = args[curCount];
+    string& curArgStr = argStrings[curCount];
 
-			case kARG_BOOL:
-				if(curArgInt != 0 && curArgInt != 1) {
-					commandResult = red("invalid boolean argument (must be 0 or 1)");
-					return false;
-				}
-				break;
+    switch(*p)
+    {
+      case kARG_WORD:
+        if(curArgInt < 0 || curArgInt > 0xffff)
+        {
+          commandResult = red("invalid word argument (must be 0-$ffff)");
+          return false;
+        }
+        break;
 
-			case kARG_BASE_SPCL:
-				if(curArgInt != 2 && curArgInt != 10 && curArgInt != 16
-					&& curArgStr != "hex" && curArgStr != "dec" && curArgStr != "bin")
-				{
-					commandResult = red("invalid base (must be #2, #10, #16, \"bin\", \"dec\", or \"hex\")");
-					return false;
-				}
-				break;
+      case kARG_BYTE:
+        if(curArgInt < 0 || curArgInt > 0xff)
+        {
+          commandResult = red("invalid byte argument (must be 0-$ff)");
+          return false;
+        }
+        break;
 
-			case kARG_LABEL:
-			case kARG_FILE:
-				break; // TODO: validate these (for now any string's allowed)
+      case kARG_BOOL:
+        if(curArgInt != 0 && curArgInt != 1)
+        {
+          commandResult = red("invalid boolean argument (must be 0 or 1)");
+          return false;
+        }
+        break;
 
-			case kARG_MULTI_BYTE:
-			case kARG_MULTI_WORD:
-				break; // FIXME: validate these (for now, any number's allowed)
+      case kARG_BASE_SPCL:
+        if(curArgInt != 2 && curArgInt != 10 && curArgInt != 16
+           && curArgStr != "hex" && curArgStr != "dec" && curArgStr != "bin")
+        {
+          commandResult = red("invalid base (must be #2, #10, #16, \"bin\", \"dec\", or \"hex\")");
+          return false;
+        }
+        break;
 
-			default:
-				commandResult = red("too many arguments");
-				return false;
-				break;
-		}
+      case kARG_LABEL:
+      case kARG_FILE:
+        break; // TODO: validate these (for now any string's allowed)
 
-		curCount++;
+      case kARG_MULTI_BYTE:
+      case kARG_MULTI_WORD:
+        break; // FIXME: validate these (for now, any number's allowed)
 
-	} while(*p++ != kARG_END_ARGS);
+      case kARG_END_ARGS:
+        break;
+    }
+    curCount++;
+    *p++;
 
-	if(curCount < argCount) {
-		commandResult = red("too many arguments");
-		return false;
-	}
+  } while(*p != kARG_END_ARGS && curCount < argRequiredCount);
 
-	return true;
+/*
+cerr << "curCount         = " << curCount << endl
+     << "argRequiredCount = " << argRequiredCount << endl
+     << "*p               = " << *p << endl << endl;
+*/
+
+  if(curCount < argRequiredCount)
+  {
+    commandResult = red("missing required argument(s)");
+    return false;
+  }
+  else if(argCount > curCount)
+  {
+    commandResult = red("too many arguments");
+    return false;
+  }
+
+  return true;
 }
 
 // main entry point: PromptWidget calls this method.
@@ -1069,6 +1162,9 @@ string DebuggerParser::run(const string& command) {
 		if( subStringMatch(verb, commands[i].cmdString.c_str()) ) {
 			if( validateArgs(i) )
 				CALL_METHOD(commands[i].executor);
+
+			if( commands[i].refreshRequired )
+				debugger->myBaseDialog->loadConfig();
 
 			return commandResult;
 		}
@@ -1163,7 +1259,7 @@ bool DebuggerParser::saveScriptFile(string file) {
 
 	FunctionDefMap funcs = debugger->getFunctionDefMap();
 	for(FunctionDefMap::const_iterator i = funcs.begin(); i != funcs.end(); ++i)
-		out << "function " << i->first << " " << i->second << endl;
+		out << "function " << i->first << " { " << i->second << " }" << endl;
 
 	for(unsigned int i=0; i<watches.size(); i++)
 		out << "watch " << watches[i] << endl;
@@ -1262,8 +1358,8 @@ void DebuggerParser::executeBreak() {
 		bp = debugger->cpuDebug().pc();
 	else
 		bp = args[0];
-
 	debugger->toggleBreakPoint(bp);
+	debugger->myRom->invalidate();
 
 	if(debugger->breakPoint(bp))
 		commandResult = "Set";
@@ -1296,9 +1392,10 @@ void DebuggerParser::executeC() {
 		debugger->cpuDebug().setC(args[0]);
 }
 
-// "cheetah"
-// (see http://members.cox.net/rcolbert/chtdox.htm)
-void DebuggerParser::executeCheetah() {
+#ifdef CHEATCODE_SUPPORT
+// "cheat"
+// (see Stella manual for different cheat types)
+void DebuggerParser::executeCheat() {
 	if(argCount == 0) {
 		commandResult = red("Missing cheat code");
 		return;
@@ -1306,15 +1403,15 @@ void DebuggerParser::executeCheetah() {
 
 	for(int arg = 0; arg < argCount; arg++) {
 		string& cheat = argStrings[arg];
-		Cheat *c = Cheat::parse(cheat);
-		if(c) {
-			c->enable();
-			commandResult = "Cheetah code " + cheat + " enabled\n";
+		const Cheat* c = debugger->getOSystem()->cheat().add("DBG", cheat);
+		if(c && c->enabled()) {
+			commandResult = "Cheat code " + cheat + " enabled\n";
 		} else {
-			commandResult = red("Invalid cheetah code " + cheat + "\n");
+			commandResult = red("Invalid cheat code " + cheat + "\n");
 		}
 	}
 }
+#endif
 
 // "clearbreaks"
 void DebuggerParser::executeClearbreaks() {
@@ -1354,6 +1451,7 @@ void DebuggerParser::executeD() {
 void DebuggerParser::executeDefine() {
 	// TODO: check if label already defined?
 	debugger->addLabel(argStrings[0], args[1]);
+	debugger->myRom->invalidate();
 	commandResult = "label " + argStrings[0] + " defined as " + debugger->valueToString(args[1]);
 }
 
@@ -1384,8 +1482,9 @@ void DebuggerParser::executeExec() {
 
 // "height"
 void DebuggerParser::executeHeight() {
-	int height = debugger->setHeight(args[0]);
-	commandResult = "height set to " + debugger->valueToString(height, kBASE_10);
+  int height = debugger->setHeight(args[0]);
+  commandResult = "height set to " + debugger->valueToString(height, kBASE_10) +
+                  "\nExit debugger and reload ROM to take effect";
 }
 
 // "help"
@@ -1471,6 +1570,7 @@ void DebuggerParser::executeLoadlist() {
 // "loadsym"
 void DebuggerParser::executeLoadsym() {
 	commandResult = debugger->equateList->loadFile(argStrings[0]);
+	debugger->myRom->invalidate();
 }
 
 // "n"
@@ -1527,6 +1627,13 @@ void DebuggerParser::executeRom() {
 		}
 	}
 
+	// Normally the run() method calls loadConfig() on the debugger,
+	// which results in all child widgets being redrawn.
+	// The RomWidget is a special case, since we don't want to re-disassemble
+	// any more than necessary.  So we only do it by calling the following
+	// method ...
+	debugger->myRom->invalidate();
+
 	commandResult = "changed ";
 	commandResult += debugger->valueToString( args.size() - 1 );
 	commandResult += " location(s)";
@@ -1534,7 +1641,7 @@ void DebuggerParser::executeRom() {
 
 // "run"
 void DebuggerParser::executeRun() {
-	debugger->saveOldState();  // FIXME - why is this here?
+	debugger->saveOldState();
 	debugger->quit();
 	commandResult = "exiting debugger";
 }
@@ -1573,7 +1680,7 @@ void DebuggerParser::executeSave() {
 // "saverom"
 void DebuggerParser::executeSaverom() {
   if(debugger->saveROM(argStrings[0]))
-    commandResult = "saved ROM";
+    commandResult = "saved ROM as " + argStrings[0];
   else
     commandResult = red("failed to save ROM");
 }
@@ -1658,7 +1765,10 @@ void DebuggerParser::executeTrapwrite() {
 // "undef"
 void DebuggerParser::executeUndef() {
 	if(debugger->equateList->undefine(argStrings[0]))
+	{
+		debugger->myRom->invalidate();
 		commandResult = argStrings[0] + " now undefined";
+	}
 	else
 		commandResult = red("no such label");
 }

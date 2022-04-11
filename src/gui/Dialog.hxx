@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Dialog.hxx,v 1.20 2005/08/11 19:12:39 stephena Exp $
+// $Id: Dialog.hxx,v 1.24 2005/12/24 22:09:36 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
@@ -36,7 +36,7 @@ class TabWidget;
   This is the base class for all dialog boxes.
   
   @author  Stephen Anthony
-  @version $Id: Dialog.hxx,v 1.20 2005/08/11 19:12:39 stephena Exp $
+  @version $Id: Dialog.hxx,v 1.24 2005/12/24 22:09:36 stephena Exp $
 */
 class Dialog : public GuiObject
 {
@@ -46,7 +46,7 @@ class Dialog : public GuiObject
     Widget* focusedWidget;
     WidgetArray focusList;
   };
-  typedef GUI::Array<Focus> FocusList;
+  typedef Common::Array<Focus> FocusList;
 
   public:
     Dialog(OSystem* instance, DialogContainer* parent,
@@ -67,6 +67,7 @@ class Dialog : public GuiObject
     void addToFocusList(WidgetArray& list, int id = -1);
     void redrawFocus();
     void addTabWidget(TabWidget* w) { _ourTab = w; }
+    void setFocus(Widget* w);
 
   protected:
     virtual void draw();
@@ -80,8 +81,11 @@ class Dialog : public GuiObject
     virtual void handleMouseMoved(int x, int y, int button);
     virtual void handleJoyDown(int stick, int button);
     virtual void handleJoyUp(int stick, int button);
+    virtual void handleJoyAxis(int stick, int axis, int value);
     virtual void handleCommand(CommandSender* sender, int cmd, int data, int id);
     virtual void handleScreenChanged() {}
+
+    virtual bool wantsEvents();
 	
     Widget* findWidget(int x, int y); // Find the widget at pos x,y if any
 

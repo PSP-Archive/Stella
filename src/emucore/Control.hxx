@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Control.hxx,v 1.2 2005/06/16 01:11:27 stephena Exp $
+// $Id: Control.hxx,v 1.4 2005/11/12 22:59:20 stephena Exp $
 //============================================================================
 
 #ifndef CONTROLLER_HXX
@@ -55,7 +55,7 @@ class Event;
   of the controller from the prespective of the controller's jack.  
 
   @author  Bradford W. Mott
-  @version $Id: Control.hxx,v 1.2 2005/06/16 01:11:27 stephena Exp $
+  @version $Id: Control.hxx,v 1.4 2005/11/12 22:59:20 stephena Exp $
 */
 class Controller
 {
@@ -66,6 +66,14 @@ class Controller
     enum Jack
     {
       Left, Right
+    };
+
+    /**
+      Enumeration of the controller types
+    */
+    enum Type
+    {
+      BoosterGrip, Driving, Keyboard, Paddles, Joystick
     };
 
   public:
@@ -81,6 +89,11 @@ class Controller
       Destructor
     */
     virtual ~Controller();
+
+    /**
+      Returns the type of this controller.
+    */
+    const Type type();
 
   public:
     /**
@@ -141,6 +154,9 @@ class Controller
     /// Reference to the event object this controller uses
     const Event& myEvent;
 
+    /// Specifies which type of controller this is (defined by child classes)
+    Type myType;
+
   protected:
     // Copy constructor isn't supported by controllers so make it private
     Controller(const Controller&);
@@ -148,5 +164,5 @@ class Controller
     // Assignment operator isn't supported by controllers so make it private
     Controller& operator = (const Controller&);
 };
-#endif
 
+#endif

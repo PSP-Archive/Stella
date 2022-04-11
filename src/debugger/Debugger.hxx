@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Debugger.hxx,v 1.74 2005/09/01 19:14:09 stephena Exp $
+// $Id: Debugger.hxx,v 1.82 2005/10/22 15:43:16 stephena Exp $
 //============================================================================
 
 #ifndef DEBUGGER_HXX
@@ -28,6 +28,8 @@ class TIADebug;
 class TiaInfoWidget;
 class TiaOutputWidget;
 class TiaZoomWidget;
+class EditTextWidget;
+class RomWidget;
 class Expression;
 
 #include <map>
@@ -50,9 +52,9 @@ typedef map<string,string> FunctionDefMap;
 
 enum {
   kDebuggerWidth  = 1023,
-  kDebuggerHeight = 767,
+  kDebuggerHeight = 700,
   kDebuggerLineHeight = 15,   // based on the height of the console font
-  kDebuggerLines = 35,
+  kDebuggerLines = 27,
 };
 
 // Constants for RAM area
@@ -62,7 +64,7 @@ enum {
 };
 
 /*
-	// These will probably turn out to be unneeded, left for reference for now
+// These will probably turn out to be unneeded, left for reference for now
 // pointer types for Debugger instance methods
 typedef uInt8 (Debugger::*DEBUGGER_BYTE_METHOD)();
 typedef uInt16 (Debugger::*DEBUGGER_WORD_METHOD)();
@@ -77,7 +79,7 @@ typedef uInt16 (Debugger::*DEBUGGER_WORD_METHOD)();
   for all debugging operations in Stella (parser, 6502 debugger, etc).
 
   @author  Stephen Anthony
-  @version $Id: Debugger.hxx,v 1.74 2005/09/01 19:14:09 stephena Exp $
+  @version $Id: Debugger.hxx,v 1.82 2005/10/22 15:43:16 stephena Exp $
 */
 class Debugger : public DialogContainer
 {
@@ -97,6 +99,8 @@ class Debugger : public DialogContainer
     virtual ~Debugger();
 
   public:
+	 OSystem *getOSystem() { return myOSystem; }
+
     /**
       Updates the basedialog to be of the type defined for this derived class.
     */
@@ -115,8 +119,11 @@ class Debugger : public DialogContainer
     /**
       Wrapper method for EventHandler::enterDebugMode() for those classes
       that don't have access to EventHandler.
+
+      @param message  Message to display when entering debugger
+      @param data     An address associated with the message
     */
-    bool start();
+    bool start(const string& message = "", int address = -1);
 
     /**
       Wrapper method for EventHandler::leaveDebugMode() for those classes
@@ -192,10 +199,6 @@ class Debugger : public DialogContainer
                      StringList& bytes, StringList& data,
                      int start, int lines);
 
-    int step();
-    int trace();
-    void nextScanline(int lines);
-    void nextFrame(int frames);
     void autoExec();
 
     string showWatches();
@@ -259,11 +262,23 @@ class Debugger : public DialogContainer
     */
     static Debugger& debugger() { return *myStaticDebugger; }
 
-	 /* these are now exposed so Expressions can use them. */
+    /**
+      Get the dimensions of the various debugger dialog areas
+      (takes mediasource into account)
+    */
+    GUI::Rect getDialogBounds() const;
+    GUI::Rect getTiaBounds() const;
+    GUI::Rect getRomBounds() const;
+    GUI::Rect getStatusBounds() const;
+    GUI::Rect getTabBounds() const;
+
+    /* These are now exposed so Expressions can use them. */
     int peek(int addr);
     int dpeek(int addr);
     int getBank();
     int bankCount();
+
+    void setBreakPoint(int bp, bool set);
 
     string loadListFile(string f = "");
     const string getSourceLines(int addr);
@@ -272,6 +287,9 @@ class Debugger : public DialogContainer
 
     bool setBank(int bank);
     bool patchROM(int addr, int value);
+
+    void lockState();
+    void unlockState();
 
   private:
     /**
@@ -290,20 +308,15 @@ class Debugger : public DialogContainer
     void setQuitState();
 
     /**
-      Get the dimensions of the various debugger dialog areas
-      (takes mediasource into account)
-    */
-    GUI::Rect getDialogBounds() const;
-    GUI::Rect getTiaBounds() const;
-    GUI::Rect getRomBounds() const;
-    GUI::Rect getStatusBounds() const;
-    GUI::Rect getTabBounds() const;
-
-    /**
       Resize the debugger dialog based on the current dimensions from
       getDialogBounds.
     */
     void resizeDialog();
+
+    int step();
+    int trace();
+    void nextScanline(int lines);
+    void nextFrame(int frames);
 
     void toggleBreakPoint(int bp);
 
@@ -355,6 +368,8 @@ class Debugger : public DialogContainer
     TiaInfoWidget*   myTiaInfo;
     TiaOutputWidget* myTiaOutput;
     TiaZoomWidget*   myTiaZoom;
+    RomWidget*       myRom;
+    EditTextWidget*  myMessage;
 
     EquateList *equateList;
     PackedBitArray *breakPoints;

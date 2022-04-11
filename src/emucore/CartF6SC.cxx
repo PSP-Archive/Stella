@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: CartF6SC.cxx,v 1.7 2005/07/30 16:58:22 urchlay Exp $
+// $Id: CartF6SC.cxx,v 1.10 2005/12/17 01:23:07 stephena Exp $
 //============================================================================
 
 #include <assert.h>
@@ -34,7 +34,7 @@ CartridgeF6SC::CartridgeF6SC(const uInt8* image)
   }
 
   // Initialize RAM with random values
-  Random random;
+  class Random random;
   for(uInt32 i = 0; i < 128; ++i)
   {
     myRAM[i] = random.next();
@@ -187,6 +187,8 @@ bool CartridgeF6SC::patch(uInt16 address, uInt8 value)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void CartridgeF6SC::bank(uInt16 bank)
 { 
+  if(bankLocked) return;
+
   // Remember what bank we're in
   myCurrentBank = bank;
   uInt16 offset = myCurrentBank * 4096;
@@ -226,12 +228,12 @@ bool CartridgeF6SC::save(Serializer& out)
   {
     out.putString(cart);
 
-    out.putLong(myCurrentBank);
+    out.putInt(myCurrentBank);
 
     // The 128 bytes of RAM
-    out.putLong(128);
+    out.putInt(128);
     for(uInt32 i = 0; i < 128; ++i)
-      out.putLong(myRAM[i]);
+      out.putInt(myRAM[i]);
 
   }
   catch(char *msg)
@@ -258,12 +260,12 @@ bool CartridgeF6SC::load(Deserializer& in)
     if(in.getString() != cart)
       return false;
 
-    myCurrentBank = (uInt16) in.getLong();
+    myCurrentBank = (uInt16) in.getInt();
 
     // The 128 bytes of RAM
-    uInt32 limit = (uInt32) in.getLong();
+    uInt32 limit = (uInt32) in.getInt();
     for(uInt32 i = 0; i < limit; ++i)
-      myRAM[i] = (uInt8) in.getLong();
+      myRAM[i] = (uInt8) in.getInt();
   }
   catch(char *msg)
   {

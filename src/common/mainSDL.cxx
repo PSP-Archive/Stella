@@ -13,15 +13,10 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: mainSDL.cxx,v 1.49 2005/08/25 15:19:17 stephena Exp $
+// $Id: mainSDL.cxx,v 1.59 2005/12/23 20:48:50 stephena Exp $
 //============================================================================
 
-#include <fstream>
-#include <iostream>
-#include <string>
 #include <sstream>
-#include <algorithm>
-#include <cstdlib>
 
 #include <SDL.h>
 
@@ -59,6 +54,14 @@
   #error Unsupported platform!
 #endif
 
+#ifdef DEVELOPER_SUPPORT
+  #include "Debugger.hxx"
+#endif
+
+#ifdef CHEATCODE_SUPPORT
+  #include "CheatManager.hxx"
+#endif
+
 static void SetupProperties(PropertiesSet& set);
 static void Cleanup();
 
@@ -72,23 +75,29 @@ OSystem* theOSystem = (OSystem*) NULL;
 */
 void SetupProperties(PropertiesSet& set)
 {
-  bool useMemList = true;  // It seems we always need the list in memory
-  string theAltPropertiesFile = theOSystem->settings().getString("pro");
-  string thePropertiesFile    = theOSystem->propertiesInputFilename();
+  // Several properties files can exist, so we attempt to load from
+  // all of them.  If the user has specified a properties file, use
+  // that one.  Otherwise, load both the system and user properties
+  // files, and have the user file override all entries from the
+  // system file.
 
-  stringstream buf;
-  if(theAltPropertiesFile != "")
+  ostringstream buf;
+
+  string altpro = theOSystem->settings().getString("pro");
+  if(altpro != "")
   {
-    buf << "Game properties: \'" << theAltPropertiesFile << "\'\n";
-    set.load(theAltPropertiesFile, useMemList);
-  }
-  else if(thePropertiesFile != "")
-  {
-    buf << "Game properties: \'" << thePropertiesFile << "\'\n";
-    set.load(thePropertiesFile, useMemList);
+    buf << "Game properties: \'" << altpro << "\'\n";
+    set.load(altpro, false);  // don't save alternate properties to userPro
   }
   else
-    set.load("", false);
+  {
+    const string& sysPro  = theOSystem->systemProperties();
+    const string& userPro = theOSystem->userProperties();
+    buf << "Game properties: \'" << sysPro << "\', \'" << userPro << "\'\n";
+
+    set.load(sysPro, false);  // don't save system-wide properties
+    set.load(userPro, true);
+  }
 
   if(theOSystem->settings().getBool("showinfo"))
     cout << buf.str() << endl;
@@ -184,6 +193,11 @@ int main(int argc, char* argv[])
   // Setup the SDL joysticks (must be done after FrameBuffer is created)
   theOSystem->eventHandler().setupJoysticks();
 
+#ifdef CHEATCODE_SUPPORT
+    // Create internal cheat database for all ROMs
+    theOSystem->cheat().loadCheatDatabase();
+#endif
+
   //// Main loop ////
   // First we check if a ROM is specified on the commandline.  If so, and if
   //   the ROM actually exists, use it to create a new console.
@@ -192,10 +206,8 @@ int main(int argc, char* argv[])
   string romfile = argv[argc - 1];
   if(argc == 1 || !FilesystemNode::fileExists(romfile))
     theOSystem->createLauncher();
-  else
+  else if(theOSystem->createConsole(romfile))
   {
-    theOSystem->createConsole(romfile);
-
     if(theOSystem->settings().getBool("holdreset"))
       theOSystem->eventHandler().handleEvent(Event::ConsoleReset, 1);
 
@@ -205,9 +217,33 @@ int main(int argc, char* argv[])
     if(theOSystem->settings().getBool("holdbutton0"))
       theOSystem->eventHandler().handleEvent(Event::JoystickZeroFire, 1);
 
+#ifdef DEVELOPER_SUPPORT
+    Debugger& dbg = theOSystem->debugger();
+
+    // Set up any breakpoint that was on the command line
+    // (and remove the key from the settings, so they won't get set again)
+    string initBreak = theOSystem->settings().getString("break");
+    if(initBreak != "")
+    {
+      int bp = dbg.stringToValue(initBreak);
+      dbg.setBreakPoint(bp, true);
+      theOSystem->settings().setString("break", "", false);
+    }
+
     if(theOSystem->settings().getBool("debug"))
       handler.enterDebugMode();
+#endif
   }
+  else
+  {
+    Cleanup();
+    return 0;
+  }
+
+  // Swallow any spurious events in the queue
+  // These are normally caused by joystick/mouse jitter
+  SDL_Event event;
+  while(SDL_PollEvent(&event)) /* swallow event */ ;
 
   // Start the main loop, and don't exit until the user issues a QUIT command
   theOSystem->mainLoop();

@@ -13,19 +13,20 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Event.hxx,v 1.13 2005/08/29 18:36:41 stephena Exp $
+// $Id: Event.hxx,v 1.19 2006/01/05 18:53:22 stephena Exp $
 //============================================================================
 
 #ifndef EVENT_HXX
 #define EVENT_HXX
 
-class Event;
-
 #include "bspf.hxx"
+
+class Event;
+class EventStreamer;
 
 /**
   @author  Bradford W. Mott
-  @version $Id: Event.hxx,v 1.13 2005/08/29 18:36:41 stephena Exp $
+  @version $Id: Event.hxx,v 1.19 2006/01/05 18:53:22 stephena Exp $
 */
 class Event
 {
@@ -52,9 +53,13 @@ class Event
       BoosterGripOneTrigger, BoosterGripOneBooster,
 
       PaddleZeroResistance, PaddleZeroFire,
+        PaddleZeroDecrease, PaddleZeroIncrease, PaddleZeroAnalog,
       PaddleOneResistance, PaddleOneFire,
+        PaddleOneDecrease, PaddleOneIncrease, PaddleOneAnalog,
       PaddleTwoResistance, PaddleTwoFire,
+        PaddleTwoDecrease, PaddleTwoIncrease, PaddleTwoAnalog,
       PaddleThreeResistance, PaddleThreeFire,
+        PaddleThreeDecrease, PaddleThreeIncrease, PaddleThreeAnalog,
 
       KeyboardZero1, KeyboardZero2, KeyboardZero3,
       KeyboardZero4, KeyboardZero5, KeyboardZero6,
@@ -73,15 +78,16 @@ class Event
 	  
       ChangeState, LoadState, SaveState, TakeSnapshot, Pause, Quit,
       MenuMode, CmdMenuMode, DebuggerMode, LauncherMode, Fry,
+      VolumeDecrease, VolumeIncrease,
 
       LastType
     };
 
   public:
     /**
-      Create a new event object
+      Create a new event object and use the given eventstreamer
     */
-    Event();
+    Event(EventStreamer* ev);
  
     /**
       Destructor
@@ -110,6 +116,9 @@ class Event
 
     // Array of values associated with each event type
     Int32 myValues[LastType];
+
+    // The eventstreamer to record events to
+    EventStreamer* myEventStreamer;
 };
 
 #endif

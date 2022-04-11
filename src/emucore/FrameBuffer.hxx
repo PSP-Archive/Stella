@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: FrameBuffer.hxx,v 1.56 2005/08/30 01:10:54 stephena Exp $
+// $Id: FrameBuffer.hxx,v 1.59 2005/10/18 18:49:46 stephena Exp $
 //============================================================================
 
 #ifndef FRAMEBUFFER_HXX
@@ -52,7 +52,7 @@ enum FrameStyle {
   All GUI elements (ala ScummVM) are drawn here as well.
 
   @author  Stephen Anthony
-  @version $Id: FrameBuffer.hxx,v 1.56 2005/08/30 01:10:54 stephena Exp $
+  @version $Id: FrameBuffer.hxx,v 1.59 2005/10/18 18:49:46 stephena Exp $
 */
 class FrameBuffer
 {
@@ -211,7 +211,7 @@ class FrameBuffer
 
       @param palette  The array of colors
     */
-    void setPalette(const uInt32* palette);
+    virtual void setPalette(const uInt32* palette);
 
     /**
       This method should be called to draw a rectangular box with sides
@@ -221,8 +221,8 @@ class FrameBuffer
       @param y      The y coordinate
       @param w      The width of the box
       @param h      The height of the box
-      @param colorA FIXME
-      @param colorB FIXME
+      @param colorA Lighter color for outside line.
+      @param colorB Darker color for inside line.
     */
     void box(uInt32 x, uInt32 y, uInt32 w, uInt32 h,
              OverlayColor colorA, OverlayColor colorB);
@@ -394,14 +394,6 @@ class FrameBuffer
     */
     virtual void addDirtyRect(uInt32 x, uInt32 y, uInt32 w, uInt32 h) = 0;
 
-    /**
-      Returns the current line dimensions (width/height) used by
-      hLine() and vLine().
-
-      @return  The line width/height (both are the same)
-    */
-    virtual uInt32 lineDim() = 0;
-
   protected:
     // The parent system for the framebuffer
     OSystem* myOSystem;
@@ -441,6 +433,9 @@ class FrameBuffer
 
     // The aspect ratio of the window
     float theAspectRatio;
+
+    // Use dirty updates (SDL_UpdateRects instead of SDL_UpdateRect)
+    bool myUseDirtyRects;
 
     // Table of RGB values for GUI elements
     static const uInt8 ourGUIColors[kNumColors-256][3];

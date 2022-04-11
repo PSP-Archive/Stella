@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: M6502Hi.cxx,v 1.12 2005/08/24 22:54:30 stephena Exp $
+// $Id: M6502Hi.cxx,v 1.15 2005/12/17 01:23:07 stephena Exp $
 //============================================================================
 
 #include "M6502Hi.hxx"
@@ -34,7 +34,7 @@ M6502High::M6502High(uInt32 systemCyclesPerProcessorCycle)
   myLastAddress = 0;
 
 #ifdef DEVELOPER_SUPPORT
-  justHitTrap = false;
+  myJustHitTrapFlag = false;
 #endif
 }
 
@@ -54,9 +54,12 @@ inline uInt8 M6502High::peek(uInt16 address)
   mySystem->incrementCycles(mySystemCyclesPerProcessorCycle);
 
 #ifdef DEVELOPER_SUPPORT
-  if(readTraps != NULL)
-    if(readTraps->isSet(address))
-      justHitTrap = true;
+  if(myReadTraps != NULL && myReadTraps->isSet(address))
+  {
+    myJustHitTrapFlag = true;
+    myHitTrapInfo.message = "Read trap: ";
+    myHitTrapInfo.address = address;
+  }
 #endif
 
   return mySystem->peek(address);
@@ -73,9 +76,12 @@ inline void M6502High::poke(uInt16 address, uInt8 value)
   mySystem->incrementCycles(mySystemCyclesPerProcessorCycle);
 
 #ifdef DEVELOPER_SUPPORT
-  if(writeTraps != NULL)
-    if(writeTraps->isSet(address))
-      justHitTrap = true;
+  if(myWriteTraps != NULL && myWriteTraps->isSet(address))
+  {
+    myJustHitTrapFlag = true;
+    myHitTrapInfo.message = "Write trap: ";
+    myHitTrapInfo.address = address;
+  }
 #endif
 
   mySystem->poke(address, value);
@@ -96,28 +102,30 @@ bool M6502High::execute(uInt32 number)
       uInt8 operand = 0;
 
 #ifdef DEVELOPER_SUPPORT
-      if(justHitTrap)
+      if(myJustHitTrapFlag)
       {
-        if(myDebugger->start()) {
-          justHitTrap = false;
+        if(myDebugger->start(myHitTrapInfo.message, myHitTrapInfo.address))
+        {
+          myJustHitTrapFlag = false;
           return true;
         }
       }
 
-      if(breakPoints != NULL)
+      if(myBreakPoints != NULL)
       {
-        if(breakPoints->isSet(PC)) {
-          if(myDebugger->start()) {
+        if(myBreakPoints->isSet(PC))
+        {
+          if(myDebugger->start("Breakpoint hit: ", PC))
             return true;
-          }
         }
       }
 
-      if(evalCondBreaks() > -1)
+      int cond = evalCondBreaks();
+      if(cond > -1)
       {
-        if(myDebugger->start()) {
+        string buf = "CBP: " + myBreakCondNames[cond];
+        if(myDebugger->start(buf))
           return true;
-        }
       }
 #endif
 
@@ -228,12 +236,12 @@ bool M6502High::save(Serializer& out)
   {
     out.putString(CPU);
 
-    out.putLong(A);    // Accumulator
-    out.putLong(X);    // X index register
-    out.putLong(Y);    // Y index register
-    out.putLong(SP);   // Stack Pointer
-    out.putLong(IR);   // Instruction register
-    out.putLong(PC);   // Program Counter
+    out.putInt(A);    // Accumulator
+    out.putInt(X);    // X index register
+    out.putInt(Y);    // Y index register
+    out.putInt(SP);   // Stack Pointer
+    out.putInt(IR);   // Instruction register
+    out.putInt(PC);   // Program Counter
 
     out.putBool(N);     // N flag for processor status register
     out.putBool(V);     // V flag for processor status register
@@ -243,12 +251,12 @@ bool M6502High::save(Serializer& out)
     out.putBool(notZ);  // Z flag complement for processor status register
     out.putBool(C);     // C flag for processor status register
 
-    out.putLong(myExecutionStatus);
+    out.putInt(myExecutionStatus);
 
     // Indicates the number of distinct memory accesses
-    out.putLong(myNumberOfDistinctAccesses);
+    out.putInt(myNumberOfDistinctAccesses);
     // Indicates the last address which was accessed
-    out.putLong(myLastAddress);
+    out.putInt(myLastAddress);
 
   }
   catch(char *msg)
@@ -275,12 +283,12 @@ bool M6502High::load(Deserializer& in)
     if(in.getString() != CPU)
       return false;
 
-    A = (uInt8) in.getLong();    // Accumulator
-    X = (uInt8) in.getLong();    // X index register
-    Y = (uInt8) in.getLong();    // Y index register
-    SP = (uInt8) in.getLong();   // Stack Pointer
-    IR = (uInt8) in.getLong();   // Instruction register
-    PC = (uInt16) in.getLong();  // Program Counter
+    A = (uInt8) in.getInt();    // Accumulator
+    X = (uInt8) in.getInt();    // X index register
+    Y = (uInt8) in.getInt();    // Y index register
+    SP = (uInt8) in.getInt();   // Stack Pointer
+    IR = (uInt8) in.getInt();   // Instruction register
+    PC = (uInt16) in.getInt();  // Program Counter
 
     N = in.getBool();     // N flag for processor status register
     V = in.getBool();     // V flag for processor status register
@@ -290,12 +298,12 @@ bool M6502High::load(Deserializer& in)
     notZ = in.getBool();  // Z flag complement for processor status register
     C = in.getBool();     // C flag for processor status register
 
-    myExecutionStatus = (uInt8) in.getLong();
+    myExecutionStatus = (uInt8) in.getInt();
 
     // Indicates the number of distinct memory accesses
-    myNumberOfDistinctAccesses = (uInt32) in.getLong();
+    myNumberOfDistinctAccesses = (uInt32) in.getInt();
     // Indicates the last address which was accessed
-    myLastAddress = (uInt16) in.getLong();
+    myLastAddress = (uInt16) in.getInt();
   }
   catch(char *msg)
   {

@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Debugger.cxx,v 1.91 2005/09/01 19:14:09 stephena Exp $
+// $Id: Debugger.cxx,v 1.104 2005/10/27 19:15:14 stephena Exp $
 //============================================================================
 
 #include "bspf.hxx"
@@ -41,6 +41,9 @@
 #include "TiaInfoWidget.hxx"
 #include "TiaOutputWidget.hxx"
 #include "TiaZoomWidget.hxx"
+#include "EditTextWidget.hxx"
+
+#include "RomWidget.hxx"
 #include "Expression.hxx"
 
 #include "YaccParser.hxx"
@@ -68,8 +71,8 @@ static const string builtin_functions[][3] = {
 	{ "_joy1button", "!(*INPT5 & $80)", "Right joystick button pressed" },
 
 	// console switches:
-	{ "_select", "!(*SWCHB & $01)", "Game Select pressed" },
-	{ "_reset", "!(*SWCHB & $02)", "Game Reset pressed" },
+	{ "_select", "!(*SWCHB & $02)", "Game Select pressed" },
+	{ "_reset", "!(*SWCHB & $01)", "Game Reset pressed" },
 	{ "_color", "*SWCHB & $08", "Color/BW set to Color" },
 	{ "_bw", "!(*SWCHB & $08)", "Color/BW set to BW" },
 	{ "_diff0a", "!(*SWCHB & $40)", "Right difficulty set to A (easy)" },
@@ -94,6 +97,7 @@ Debugger::Debugger(OSystem* osystem)
     myTiaInfo(NULL),
     myTiaOutput(NULL),
     myTiaZoom(NULL),
+    myRom(NULL),
     equateList(NULL),
     breakPoints(NULL),
     readTraps(NULL),
@@ -111,15 +115,6 @@ Debugger::Debugger(OSystem* osystem)
   // there will only be ever one instance of debugger in Stella,
   // I don't care :)
   myStaticDebugger = this;
-
-  // init builtins
-  for(int i=0; builtin_functions[i][0] != ""; i++) {
-    string f = builtin_functions[i][1];
-    int res = YaccParser::parse(f.c_str());
-    if(res != 0) cerr << "ERROR in builtin function!" << endl;
-    Expression *exp = YaccParser::getResult();
-    addFunction(builtin_functions[i][0], builtin_functions[i][1], exp, true);
-  }
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -151,18 +146,8 @@ void Debugger::initialize()
   myTiaInfo   = dd->tiaInfo();
   myTiaOutput = dd->tiaOutput();
   myTiaZoom   = dd->tiaZoom();
-
-  // set up any breakpoint that was on the command line
-  // (and remove the key from the settings, so they won't get set again)
-  string initBreak = myOSystem->settings().getString("break");
-  if(initBreak != "") run("break " + initBreak);
-  myOSystem->settings().setString("break", "", false);
-
-  // set up any cheeetah code that was on the command line
-  // (and remove the key from the settings, so they won't get set again)
-  string cheetah = myOSystem->settings().getString("cheetah");
-  if(cheetah != "") run("cheetah " + cheetah);
-  myOSystem->settings().setString("cheetah", "", false);
+  myRom       = dd->rom();
+  myMessage   = dd->message();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -200,9 +185,20 @@ void Debugger::setConsole(Console* console)
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-bool Debugger::start()
+bool Debugger::start(const string& message, int address)
 {
-  return myOSystem->eventHandler().enterDebugMode();
+  bool result = myOSystem->eventHandler().enterDebugMode();
+
+  // This must be done *after* we enter debug mode,
+  // so the message isn't erased
+  ostringstream buf;
+  buf << message;
+  if(address > -1)
+    buf << valueToString(address);
+
+  myMessage->setEditString(buf.str());
+
+  return result;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -302,6 +298,15 @@ const string Debugger::getSourceLines(int addr) {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void Debugger::autoExec() {
+	// autoexec.stella is always run
+	myPrompt->print("autoExec():\n" +
+			myParser->exec(
+				myOSystem->baseDir() +
+				BSPF_PATH_SEPARATOR +
+				"autoexec.stella") +
+			"\n");
+
+	// also, "romname.stella" if present
 	string file = myOSystem->romFile();
 
 	string::size_type pos;
@@ -312,6 +317,15 @@ void Debugger::autoExec() {
 	}
 	myPrompt->print("autoExec():\n" + myParser->exec(file) + "\n");
 	myPrompt->printPrompt();
+
+	// init builtins
+	for(int i=0; builtin_functions[i][0] != ""; i++) {
+		string f = builtin_functions[i][1];
+		int res = YaccParser::parse(f.c_str());
+		if(res != 0) cerr << "ERROR in builtin function!" << endl;
+		Expression *exp = YaccParser::getResult();
+		addFunction(builtin_functions[i][0], builtin_functions[i][1], exp, true);
+	}
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -656,11 +670,11 @@ int Debugger::step()
   saveOldState();
 
   int cyc = mySystem->cycles();
-  mySystem->unlockDataBus();
-  mySystem->m6502().execute(1);
-  mySystem->lockDataBus();
-
-  myBaseDialog->loadConfig();
+  //	mySystem->unlockDataBus();
+  unlockState();
+  myOSystem->console().mediaSource().updateScanlineByStep();
+  //	mySystem->lockDataBus();
+  unlockState();
 
   return mySystem->cycles() - cyc;
 }
@@ -678,7 +692,6 @@ int Debugger::step()
 
 int Debugger::trace()
 {
-
   // 32 is the 6502 JSR instruction:
   if(mySystem->peek(myCpuDebug->pc()) == 32) {
     saveOldState();
@@ -686,13 +699,11 @@ int Debugger::trace()
     int cyc = mySystem->cycles();
     int targetPC = myCpuDebug->pc() + 3; // return address
 
-    mySystem->unlockDataBus();
-
-    while(myCpuDebug->pc() != targetPC)
-      mySystem->m6502().execute(1);
-
-    mySystem->lockDataBus();
-    myBaseDialog->loadConfig();
+    //	mySystem->unlockDataBus();
+	 unlockState();
+    myOSystem->console().mediaSource().updateScanlineByTrace(targetPC);
+    //	mySystem->lockDataBus();
+	 lockState();
 
     return mySystem->cycles() - cyc;
   } else {
@@ -710,6 +721,17 @@ void Debugger::toggleBreakPoint(int bp) {
   mySystem->m6502().setBreakPoints(breakPoints);
   if(bp < 0) bp = myCpuDebug->pc();
   breakPoints->toggle(bp);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void Debugger::setBreakPoint(int bp, bool set)
+{
+  mySystem->m6502().setBreakPoints(breakPoints);
+  if(bp < 0) bp = myCpuDebug->pc();
+  if(set)
+    breakPoints->set(bp);
+  else
+    breakPoints->clear(bp);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -810,21 +832,25 @@ void Debugger::disassemble(IntArray& addr, StringList& addrLabel,
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void Debugger::nextScanline(int lines) {
+void Debugger::nextScanline(int lines)
+{
   saveOldState();
-  mySystem->unlockDataBus();
+  //	mySystem->unlockDataBus();
+  unlockState();
   myTiaOutput->advanceScanline(lines);
-  mySystem->lockDataBus();
-  myBaseDialog->loadConfig();
+  //	mySystem->lockDataBus();
+  lockState();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void Debugger::nextFrame(int frames) {
+void Debugger::nextFrame(int frames)
+{
   saveOldState();
-  mySystem->unlockDataBus();
+  //	mySystem->unlockDataBus();
+  unlockState();
   myTiaOutput->advance(frames);
-  mySystem->lockDataBus();
-  myBaseDialog->loadConfig();
+  //	mySystem->lockDataBus();
+  lockState();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -887,7 +913,9 @@ void Debugger::reloadROM() {
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool Debugger::setBank(int bank) {
   if(myConsole->cartridge().bankCount() > 1) {
+    myConsole->cartridge().unlockBank();
     myConsole->cartridge().bank(bank);
+    myConsole->cartridge().lockBank();
     return true;
   }
   return false;
@@ -925,14 +953,16 @@ void Debugger::saveOldState()
 void Debugger::setStartState()
 {
   // Lock the bus each time the debugger is entered, so we don't disturb anything
-  mySystem->lockDataBus();
+  //	mySystem->lockDataBus();
+  lockState();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void Debugger::setQuitState()
 {
   // Bus must be unlocked for normal operation when leaving debugger mode
-  mySystem->unlockDataBus();
+  //	mySystem->unlockDataBus();
+  unlockState();
 
   // execute one instruction on quit. If we're
   // sitting at a breakpoint/trap, this will get us past it.
@@ -944,6 +974,9 @@ void Debugger::setQuitState()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 GUI::Rect Debugger::getDialogBounds() const
 {
+  // FIXME - This whole method is due for an overall
+  //         We need to decide if Stella GUI size will be pixel based
+  //         or font based, and update the GUI code everywhere
   GUI::Rect tia = getTiaBounds();
 
   int userHeight = myOSystem->settings().getInt("debugheight");
@@ -956,8 +989,8 @@ GUI::Rect Debugger::getDialogBounds() const
 
   // Make sure window is always at least 'kDebuggerHeight' high
   // We need this to make positioning of widget easier
-  if(userHeight < kDebuggerHeight + tia.height())
-    userHeight = kDebuggerHeight - tia.height();
+  if(userHeight + tia.height() < kDebuggerHeight)
+    userHeight = kDebuggerHeight;
 
   GUI::Rect r(0, 0, kDebuggerWidth, userHeight + tia.height());
   return r;
@@ -1022,7 +1055,7 @@ GUI::Rect Debugger::getTabBounds() const
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void Debugger::resizeDialog()
 {
-cerr << "Debugger::resizeDialog()\n";
+//	cerr << "Debugger::resizeDialog()\n";
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1087,10 +1120,23 @@ const string Debugger::builtinHelp() {
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-bool Debugger::saveROM(string filename) {
+bool Debugger::saveROM(string filename)
+{
   // TODO: error checking
   ofstream *out = new ofstream(filename.c_str(), ios::out | ios::binary);
   bool res = myConsole->cartridge().save(*out);
   delete out;
   return res;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void Debugger::lockState() {
+  mySystem->lockDataBus();
+  myConsole->cartridge().lockBank();
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void Debugger::unlockState() {
+  mySystem->unlockDataBus();
+  myConsole->cartridge().unlockBank();
 }

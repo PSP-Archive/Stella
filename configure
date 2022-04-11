@@ -24,6 +24,7 @@ _build_sound=yes
 _build_developer=yes
 _build_snapshot=yes
 _build_joystick=yes
+_build_cheats=yes
 _build_static=no
 
 # more defaults
@@ -45,6 +46,7 @@ NASMFLAGS=""
 NASM=""
 _prefix=/usr/local
 _have_x86=""
+X_LIBS="/usr/X11R6/lib"
 
 _srcdir=`dirname $0`
 
@@ -64,9 +66,9 @@ cc_check() {
 	echo >> "$TMPLOG"
 	cat "$TMPC" >> "$TMPLOG"
 	echo >> "$TMPLOG"
-	echo "$CXX $TMPC -o $TMPO $@" >> "$TMPLOG"
+	echo "$CXX $TMPC -o $TMPO$EXEEXT $@" >> "$TMPLOG"
 	rm -f "$TMPO$EXEEXT"
-	( $CXX "$TMPC" -o "$TMPO" "$@" ) >> "$TMPLOG" 2>&1
+	( $CXX "$TMPC" -o "$TMPO$EXEEXT" "$@" ) >> "$TMPLOG" 2>&1
 	TMP="$?"
 	echo >> "$TMPLOG"
 	return "$TMP"
@@ -95,9 +97,9 @@ EOF
 
 if test -n "$_host"; then
 	# In cross-compiling mode, we cannot run the result
-	eval "$1 -o tmp_cxx_compiler tmp_cxx_compiler.cpp 2> /dev/null" && rm -f tmp_cxx_compiler$EXEEXT tmp_cxx_compiler.cpp
+	eval "$1 -o tmp_cxx_compiler$EXEEXT tmp_cxx_compiler.cpp 2> /dev/null" && rm -f tmp_cxx_compiler$EXEEXT tmp_cxx_compiler.cpp
 else
-	eval "$1 -o tmp_cxx_compiler tmp_cxx_compiler.cpp 2> /dev/null" && eval "./tmp_cxx_compiler 2> /dev/null" && rm -f tmp_cxx_compiler$EXEEXT tmp_cxx_compiler.cpp
+	eval "$1 -o tmp_cxx_compiler$EXEEXT tmp_cxx_compiler.cpp 2> /dev/null" && eval "./tmp_cxx_compiler 2> /dev/null" && rm -f tmp_cxx_compiler$EXEEXT tmp_cxx_compiler.cpp
 fi
 }
 
@@ -111,9 +113,11 @@ find_sdlconfig()
 	sdlconfigs="$_sdlconfig:sdl-config:sdl11-config:sdl12-config"
 	_sdlconfig=
 	
-	IFS="${IFS=   }"; ac_save_ifs="$IFS"; IFS=":"
+	IFS="${IFS=   }"; ac_save_ifs="$IFS"; IFS="$SEPARATOR"
 	done=0
 	for path_dir in $_sdlpath; do
+                #reset separator to parse sdlconfigs
+                IFS=":"
 		for sdlconfig in $sdlconfigs; do
 			if test -x "$path_dir/$sdlconfig" ; then
 				_sdlconfig="$path_dir/$sdlconfig"
@@ -242,17 +246,27 @@ Configuration:
   -h, --help             display this help and exit
 
 Installation directories:
-  --prefix=DIR           use this prefix for installing Stella [/usr/local]
-  --bindir=DIR           directory to install the stella binary in [PREFIX/bin]
-  --mandir=DIR           directory to install the manpage in [PREFIX/man]
+  --prefix=DIR           use this prefix for installing stella  [/usr/local]
+  --bindir=DIR           directory to install the stella binary [PREFIX/bin]
+  --docdir=DIR           directory to install documentation     [PREFIX/share/doc/stella]
+  --datadir=DIR          directory to install icons/data files  [PREFIX/share]
 
 Optional Features:
-  --disable-gl           disable OpenGL rendering support
-  --disable-sound        disable sound support
-  --disable-developer    disable all developer options (including debugger)
-  --disable-snapshot     disable snapshot support
-  --disable-joystick     disable joystick support
-  --enable-static        build static binary (if possible)
+  --enable-gl            enable/disable OpenGL rendering support [enabled]
+  --disable-gl
+  --enable-sound         enable/disable sound support [enabled]
+  --disable-sound
+  --enable-developer     enable/disable all developer/debugger options [enabled]
+  --disable-developer
+  --enable-snapshot      enable/disable snapshot support [enabled]
+  --disable-snapshot
+  --enable-joystick      enable/disable joystick support [enabled]
+  --disable-joystick
+  --enable-cheats        enable/disable cheatcode support [enabled]
+  --disable-cheats
+  --enable-shared        build shared binary [enabled]
+  --enable-static        build static binary (if possible) [disabled]
+  --disable-static
 
 Optional Libraries:
   --with-zlib-prefix=DIR   Prefix where zlib is installed (optional)
@@ -265,6 +279,8 @@ Optional Libraries:
 
   --with-nasm-prefix=DIR   Prefix where nasm executable is installed (optional)
   --disable-nasm           disable assembly language optimizations [autodetect]
+
+  --x-libraries            Path to X11 libraries [${X_LIBS}]
 
 Some influential environment variables:
   LDFLAGS	linker flags, e.g. -L<lib dir> if you have libraries in a
@@ -281,19 +297,27 @@ done # for parm in ...
 
 for ac_option in $@; do
     case "$ac_option" in
-      --disable-gl)             _build_gl=no        ;;
-      --disable-sound)          _build_sound=no     ;;
-      --disable-developer)      _build_developer=no ;;
-      --disable-snapshot)       _build_snapshot=no  ;;
-      --disable-joystick)       _build_joystick=no  ;;
-      --enable-zlib)            _zlib=yes       ;;
-      --disable-zlib)           _zlib=no        ;;
-      --enable-png)             _png=yes        ;;
-      --disable-png)            _png=no         ;;
-      --enable-nasm)            _nasm=yes       ;;
-      --disable-nasm)           _nasm=no        ;;
-      --enable-static)          _build_static=yes       ;;
-      --disable-static)         _build_static=no        ;;
+      --enable-gl)              _build_gl=yes        ;;
+      --disable-gl)             _build_gl=no         ;;
+      --enable-sound)           _build_sound=yes     ;;
+      --disable-sound)          _build_sound=no      ;;
+      --enable-developer)       _build_developer=yes ;;
+      --disable-developer)      _build_developer=no  ;;
+      --enable-snapshot)        _build_snapshot=yes  ;;
+      --disable-snapshot)       _build_snapshot=no   ;;
+      --enable-joystick)        _build_joystick=yes  ;;
+      --disable-joystick)       _build_joystick=no   ;;
+      --enable-cheats)          _build_cheats=yes    ;;
+      --disable-cheats)         _build_cheats=no     ;;
+      --enable-zlib)            _zlib=yes            ;;
+      --disable-zlib)           _zlib=no             ;;
+      --enable-png)             _png=yes             ;;
+      --disable-png)            _png=no              ;;
+      --enable-nasm)            _nasm=yes            ;;
+      --disable-nasm)           _nasm=no             ;;
+      --enable-shared)          _build_static=no     ;;
+      --enable-static)          _build_static=yes    ;;
+      --disable-static)         _build_static=no     ;;
       --with-zlib-prefix=*)
         _prefix=`echo $ac_option | cut -d '=' -f 2`
         ZLIB_CFLAGS="-I$_prefix/include"
@@ -312,6 +336,10 @@ for ac_option in $@; do
         arg=`echo $ac_option | cut -d '=' -f 2`
         _nasmpath="$arg:$arg/bin"
         ;;
+      --x-libraries=*)
+        arg=`echo $ac_option | cut -d '=' -f 2`
+        X_LIBS="$arg"
+        ;;
       --host=*)
         _host=`echo $ac_option | cut -d '=' -f 2`
         ;;
@@ -321,8 +349,11 @@ for ac_option in $@; do
       --bindir=*)
         _bindir=`echo $ac_option | cut -d '=' -f 2`
         ;;
-      --mandir=*)
-        _mandir=`echo $ac_option | cut -d '=' -f 2`
+      --docdir=*)
+        _docdir=`echo $ac_option | cut -d '=' -f 2`
+        ;;
+      --datadir=*)
+        _datadir=`echo $ac_option | cut -d '=' -f 2`
         ;;
       *)
         echo "warning: unrecognised option: $ac_option"
@@ -365,7 +396,7 @@ esac
 # Determine extension used for executables
 #
 case $_host_os in
-mingw* | cygwin*)
+mingw* | cygwin* |os2-emx*)
 	EXEEXT=".exe"
 	;;
 arm-riscos-aof)
@@ -378,6 +409,19 @@ psp)
 	EXEEXT=""
 	;;
 esac
+
+#
+# Determine separator used for $PATH
+#
+case $_host_os in
+os2-emx* )
+        SEPARATOR=";"
+        ;;
+* )
+        SEPARATOR=":"
+        ;;
+esac
+
 
 #
 # Determine the C++ compiler
@@ -528,6 +572,11 @@ else
 			LIBS="$LIBS -mno-cygwin -lmingw32 -lwinmm"
 			_host_os=win32
 			;;
+		os2*)
+			DEFINES="$DEFINES -DUNIX -DOS2"
+                        LIBS="$LIBS -lpng -lz"
+			_host_os=unix
+			;;
 		# given this is a shell script assume some type of unix
 		*)
 			echo "WARNING: could not establish system type, assuming unix like"
@@ -600,7 +649,8 @@ echo "$_opengl"
 # figure out installation directories
 #
 test -z "$_bindir" && _bindir="$_prefix/bin"
-test -z "$_mandir" && _mandir="$_prefix/man"
+test -z "$_docdir" && _docdir="$_prefix/share/doc/stella"
+test -z "$_datadir" && _datadir="$_prefix/share"
 
 echo
 echo_n "Summary:"
@@ -658,6 +708,14 @@ else
 	echo
 fi
 
+if test "$_build_cheats" = yes ; then
+	echo_n "   Cheatcode support enabled"
+	echo
+else
+	echo_n "   Cheatcode support disabled"
+	echo
+fi
+
 if test "$_build_static" = yes ; then
 	echo_n "   Static binary enabled"
 	echo
@@ -680,6 +738,7 @@ GUI="$SRC/gui"
 DBG="$SRC/debugger"
 DBGGUI="$SRC/debugger/gui"
 YACC="$SRC/yacc"
+CHEAT="$SRC/cheat"
 
 INCLUDES="-I$CORE -I$CORE/m6502/src -I$CORE/m6502/src/bspf/src -I$COMMON -I$GUI"
 
@@ -702,13 +761,14 @@ case $_host_os in
 			# Add OpenGL stuff
 			if test "$_build_gl" = yes ; then
 				DEFINES="$DEFINES -DDISPLAY_OPENGL"
-				LIBS="$LIBS -L/usr/X11R6/lib -lGL"
+				LIBS="$LIBS -L$X_LIBS -lGL"
 			fi
 			;;
 		win32)
 			DEFINES="$DEFINES -DBSPF_WIN32 -DHAVE_GETTIMEOFDAY -DHAVE_INTTYPES"
 			MODULES="$MODULES $SRC/win32"
 			INCLUDES="$INCLUDES -I$SRC/win32"
+			LIBS="$LIBS -lmingw32 -lwinmm"
 
 			# Add OpenGL stuff
 			if test "$_build_gl" = yes ; then
@@ -719,11 +779,10 @@ case $_host_os in
 		psp)
 			# -O3 is need for speed
 			# -G0 to avoid c++ link problems
-			CXXFLAGS="-G0 -O3 -fomit-frame-pointer -funroll-loops"
+			CXXFLAGS="-G0 -O2  -fno-rtti"
 			# 2 times -lc to avoid link problems. psp-gcc seems to to forget the first -lc wiile stdc++ linking
 			LIBS="-L `psp-config  --pspsdk-path`/lib -L`psp-config  --pspsdk-path`/../lib  "
-			LIBS="$LIBS -lSDLmain -lSDL -lpng -lm -lpspsdk -lpspdebug -lpspgu -lpspctrl "
-			LIBS="$LIBS -lpspaudio -lc -lz -lpspkernel -lpspuser -lpspge -lpspdisplay -lpsphprm -lpsppower -lstdc++ -lc"
+			LIBS="$LIBS -lSDLmain -lSDL -lGL -lm -lpspdebug -lpspgu -lpspctrl -lpspge -lpspdisplay -lpsphprm -lpspsdk -lpsprtc -lpspaudio -lc -lpspuser -lpspkernel -lpsppower -lpng -lz -lm -lg -lstdc++ -lc -lpsputility"
 			# psp compiler
 			CC="psp-gcc"
 			LD="psp-gcc"
@@ -734,6 +793,7 @@ case $_host_os in
 
 			# psp specific tool 
 			PSP_STRIP=`psp-config  --pspdev-path`"/bin/psp-strip"
+			PSP_FIX=`psp-config  --pspdev-path`"/bin/psp-fixup-imports"
 			PACK_PBP=`psp-config  --pspdev-path`"/bin/pack-pbp"
 			MKSFO="`psp-config  --pspdev-path`/bin/mksfo"
 
@@ -761,14 +821,28 @@ fi
 
 if test "$_build_snapshot" = yes ; then
 	DEFINES="$DEFINES -DSNAPSHOT_SUPPORT"
-	LIBS="$LIBS -lpng -lz" # FIXME: -lz included twice
+	LIBS="$LIBS -lpng"
 fi
 
 if test "$_build_joystick" = yes ; then
 	DEFINES="$DEFINES -DJOYSTICK_SUPPORT"
 fi
 
+if test "$_build_cheats" = yes ; then
+	DEFINES="$DEFINES -DCHEATCODE_SUPPORT"
+	MODULES="$MODULES $CHEAT"
+	INCLUDES="$INCLUDES -I$CHEAT"
+fi
 
+
+# 20051003 bkw: fix static Linux build.
+# No guarantee this will work for anyone other than me, and no
+# guarantee it's needed by anyone but me (and Steve)...
+if test "$_host_os" = unix ; then
+  if test "$_build_static" = yes ; then
+    LIBS="`echo \"$LIBS\" | sed 's/-lz -lpng/-lpng -lz/'`"
+  fi
+fi
 
 echo "Creating config.mak"
 cat > config.mak << EOF
@@ -798,7 +872,8 @@ NASMFLAGS := $NASMFLAGS
 
 PREFIX := $_prefix
 BINDIR := $_bindir
-MANDIR := $_mandir
+DOCDIR := $_docdir
+DATADIR := $_datadir
 
 $_make_def_HAVE_GCC3
 #$_make_def_HAVE_NASM
@@ -813,6 +888,7 @@ if test $_host_os = "psp" ; then
 cat >> config.mak << EOF
 
 PSP-STRIP       := $PSP_STRIP
+PSP-FIX         := $PSP_FIX
 PACK-PBP        := $PACK_PBP
 MKSFO           := $MKSFO
 PSP-MOUNTPOINT  := $PSP_MOUNTPOINT

@@ -1,8 +1,8 @@
 //============================================================================
 //
-//   SSSS    tt          lll  lll       
-//  SS  SS   tt           ll   ll        
-//  SS     tttttt  eeee   ll   ll   aaaa 
+//   SSSS    tt          lll  lll
+//  SS  SS   tt           ll   ll
+//  SS     tttttt  eeee   ll   ll   aaaa
 //   SSSS    tt   ee  ee  ll   ll      aa
 //      SS   tt   eeeeee  ll   ll   aaaaa  --  "An Atari 2600 VCS Emulator"
 //  SS  SS   tt   ee      ll   ll  aa  aa
@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: FrameBufferSoft.hxx,v 1.22 2005/08/24 01:07:36 stephena Exp $
+// $Id: FrameBufferSoft.hxx,v 1.25 2005/10/09 17:31:47 stephena Exp $
 //============================================================================
 
 #ifndef FRAMEBUFFER_SOFT_HXX
@@ -35,7 +35,7 @@ class RectList;
   This class implements an SDL software framebuffer.
 
   @author  Stephen Anthony
-  @version $Id: FrameBufferSoft.hxx,v 1.22 2005/08/24 01:07:36 stephena Exp $
+  @version $Id: FrameBufferSoft.hxx,v 1.25 2005/10/09 17:31:47 stephena Exp $
 */
 class FrameBufferSoft : public FrameBuffer
 {
@@ -43,7 +43,7 @@ class FrameBufferSoft : public FrameBuffer
     /**
       Creates a new software framebuffer
     */
-    FrameBufferSoft(OSystem* osystem, bool useHardSurface = false);
+    FrameBufferSoft(OSystem* osystem);
 
     /**
       Destructor
@@ -186,23 +186,12 @@ class FrameBufferSoft : public FrameBuffer
     */
     virtual void addDirtyRect(uInt32 x, uInt32 y, uInt32 w, uInt32 h);
 
-    /**
-      Returns the current line dimensions (width/height) used by
-      hLine() and vLine().
-
-      @return  The line width/height (both are the same)
-    */
-    virtual uInt32 lineDim() { return theZoomLevel; }
-
-  private:
+  protected:
     // Used in the dirty update of the SDL surface
     RectList* myRectList;
 
     // Used in the dirty update of the overlay surface
     RectList* myOverlayRectList;
-
-    // Whether to use hardware or software surface
-    bool myUseHardSurface;
 };
 
 class RectList

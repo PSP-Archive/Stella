@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: EventHandler.hxx,v 1.49 2005/08/30 23:32:42 stephena Exp $
+// $Id: EventHandler.hxx,v 1.71 2006/01/05 18:53:23 stephena Exp $
 //============================================================================
 
 #ifndef EVENTHANDLER_HXX
@@ -23,9 +23,16 @@
 
 #include "bspf.hxx"
 #include "Event.hxx"
+#include "Array.hxx"
+#include "Control.hxx"
+#include "StringList.hxx"
+#include "Serializer.hxx"
 
 class Console;
 class OSystem;
+class DialogContainer;
+class EventMappingWidget;
+class EventStreamer;
 
 enum MouseButton {
   EVENT_LBUTTONDOWN,
@@ -43,23 +50,43 @@ struct ActionList {
   string key;
 };
 
+enum {
+  kActionListSize = 81
+};
+
 // Joystick related items
 enum {
   kNumJoysticks  = 8,
   kNumJoyButtons = 24,
-  kJAxisUp       = kNumJoyButtons - 4,  // Upper 4 buttons are actually
-  kJAxisDown     = kNumJoyButtons - 3,  // directions
-  kJAxisLeft     = kNumJoyButtons - 2,
-  kJAxisRight    = kNumJoyButtons - 1
+  kNumJoyAxis    = 16
 };
 
-enum JoyType { JT_NONE, JT_REGULAR, JT_STELLADAPTOR_1, JT_STELLADAPTOR_2 };
+enum JoyType {
+  JT_NONE,
+  JT_REGULAR,
+  JT_STELLADAPTOR_LEFT,
+  JT_STELLADAPTOR_RIGHT
+};
+
+enum JoyAxisType {
+  JA_NONE,
+  JA_DIGITAL,
+  JA_ANALOG
+};
 
 struct Stella_Joystick {
   SDL_Joystick* stick;
   JoyType       type;
+  string        name;
 };
 
+// Used for joystick to mouse emulation
+struct JoyMouse {	
+  bool active;
+  int x, y, x_vel, y_vel, x_max, y_max, x_amt, y_amt, amt,
+      x_down_count, y_down_count;
+  unsigned int last_time, delay_time, x_down_time, y_down_time;
+};
 
 /**
   This class takes care of event remapping and dispatching for the
@@ -74,10 +101,12 @@ struct Stella_Joystick {
   mapping can take place.
 
   @author  Stephen Anthony
-  @version $Id: EventHandler.hxx,v 1.49 2005/08/30 23:32:42 stephena Exp $
+  @version $Id: EventHandler.hxx,v 1.71 2006/01/05 18:53:23 stephena Exp $
 */
 class EventHandler
 {
+  friend class EventMappingWidget;
+
   public:
     /**
       Create a new event handler object
@@ -97,7 +126,7 @@ class EventHandler
 
       @return The event object
     */
-    Event* event();
+    Event* event() { return myEvent; }
 
     /**
       Set up any joysticks on the system.  This must be called *after* the
@@ -105,6 +134,14 @@ class EventHandler
       intialized before joysticks can be probed.
     */
     void setupJoysticks();
+
+    /**
+      Maps the given stelladaptors to specified ports on a real 2600
+
+      @param sa1  Port for the first Stelladaptor to emulate (left or right)
+      @param sa2  Port for the second Stelladaptor to emulate (left or right)
+    */
+    void mapStelladaptors(const string& sa1, const string& sa2);
 
     /**
       Collects and dispatches any pending events.  This method should be
@@ -115,33 +152,24 @@ class EventHandler
     void poll(uInt32 time);
 
     /**
-      Bind a key to an event/action
+      Set the default action for a joystick button to the given event
 
-      @param event  The event we are remapping
-      @param key    The key to bind to this event
+      @param event  The event we are assigning
+      @param stick  The joystick number
+      @param button The joystick button
     */
-    void addKeyMapping(Event::Type event, uInt16 key);
+    void setDefaultJoyMapping(Event::Type event, int stick, int button);
 
     /**
-      Bind a joystick button/direction to an event/action
+      Set the default for a joystick axis to the given event
 
-      @param event  The event we are remapping
-      @param stick  The joystick number and button
-      @param code     to bind to this event
+      @param event  The event we are assigning
+      @param stick  The joystick number
+      @param axis   The joystick axis
+      @param value  The value on the given axis
     */
-    void addJoyMapping(Event::Type event, uInt8 stick, uInt32 code);
-
-    /**
-      Erase the specified mapping
-
-      @event  The event for which we erase all mappings
-    */
-    void eraseMapping(Event::Type event);
-
-    /**
-      Resets the event mappings to default values
-    */
-    void setDefaultMapping();
+    void setDefaultJoyAxisMapping(Event::Type event, int stick, int axis,
+                                  int value);
 
     /**
       Returns the current state of the EventHandler
@@ -149,6 +177,12 @@ class EventHandler
       @return The State type
     */
     inline State state() { return myState; }
+
+    /**
+      Returns the current launcher state (decide whether to enter launcher
+      on game exit).
+    */
+    inline bool useLauncher() { return myUseLauncherFlag; }
 
     /**
       Resets the state machine of the EventHandler to the defaults
@@ -180,12 +214,12 @@ class EventHandler
     /**
       Save state to explicit state number (debugger uses this)
     */
-	 void saveState(int state);
+    void saveState(int state);
 
     /**
       Load state from explicit state number (debugger uses this)
     */
-	 void loadState(int state);
+    void loadState(int state);
 
     /**
       Sets the mouse to act as paddle 'num'
@@ -193,7 +227,15 @@ class EventHandler
       @param num          The paddle which the mouse should emulate
       @param showmessage  Print a message to the framebuffer
     */
-    void setPaddleMode(uInt32 num, bool showmessage = false);
+    void setPaddleMode(int num, bool showmessage = false);
+
+    /**
+      Sets the speed of the given paddle
+
+      @param num    The paddle number (0-3)
+      @param speed  The speed of paddle movement for the given paddle
+    */
+    void setPaddleSpeed(int num, int speed);
 
     inline bool kbdAlt(int mod)
     {
@@ -218,25 +260,11 @@ class EventHandler
       return (mod & KMOD_SHIFT);
     }
 
-    void enterMenuMode();
+    void enterMenuMode(State state);
     void leaveMenuMode();
-    void enterCmdMenuMode();
-    void leaveCmdMenuMode();
     bool enterDebugMode();
     void leaveDebugMode();
-
-    // Holds static strings for the remap menu
-    static ActionList ourActionList[62];
-
-    // Lookup table for paddle resistance events
-    static const Event::Type Paddle_Resistance[4];
-
-    // Lookup table for paddle button events
-    static const Event::Type Paddle_Button[4];
-
-    // Static lookup tables for Stelladaptor axis support
-    static const Event::Type SA_Axis[2][2][3];
-    static const Event::Type SA_DrivingValue[2];
+    void saveProperties();
 
     /**
       Send an event directly to the event handler.
@@ -247,17 +275,66 @@ class EventHandler
     */
     void handleEvent(Event::Type type, Int32 value);
 
-    bool frying() { return myFryingFlag; }
+    inline bool frying() { return myFryingFlag; }
+
+    /**
+      Create a synthetic SDL mouse motion event based on the given x,y values.
+
+      @param x  The x coordinate of motion, scaled in value
+      @param y  The y coordinate of motion, scaled in value
+    */
+    void createMouseMotionEvent(int x, int y);
+
+    /**
+      Create a synthetic SDL mouse button event based on the given x,y values.
+
+      @param x     The x coordinate of motion, scaled in value
+      @param y     The y coordinate of motion, scaled in value
+      @param state The state of the button click (on or off)
+    */
+    void createMouseButtonEvent(int x, int y, int state);
 
   private:
     /**
-      Send a keyboard event to the handler.
+      Bind a key to an event/action and regenerate the mapping array(s)
 
-      @param key   keysym
-      @param mod   modifiers
-      @param state state of key
+      @param event  The event we are remapping
+      @param key    The key to bind to this event
     */
-    void handleKeyEvent(int unicode, SDLKey key, SDLMod mod, uInt8 state);
+    void addKeyMapping(Event::Type event, int key);
+
+    /**
+      Bind a joystick button to an event/action and regenerate the
+      mapping array(s)
+
+      @param event  The event we are remapping
+      @param stick  The joystick number
+      @param button The joystick button
+    */
+    void addJoyMapping(Event::Type event, int stick, int button);
+
+    /**
+      Bind a joystick axis direction to an event/action and regenerate
+      the mapping array(s)
+
+      @param event  The event we are remapping
+      @param stick  The joystick number
+      @param axis   The joystick axis
+      @param value  The value on the given axis
+    */
+    void addJoyAxisMapping(Event::Type event, int stick, int axis, int value);
+
+    /**
+      Erase the specified mapping
+
+      @event  The event for which we erase all mappings
+    */
+    void eraseMapping(Event::Type event);
+
+    /**
+      Resets the event mappings to default values
+    */
+    void setDefaultMapping();
 
     /**
       Send a mouse motion event to the handler.
@@ -271,32 +348,24 @@ class EventHandler
 
       @param event The mouse button event generated by SDL
     */
-    void handleMouseButtonEvent(SDL_Event& event, uInt8 state);
+    void handleMouseButtonEvent(SDL_Event& event, int state);
 
     /**
-      Send a joystick event to the handler (directions are encoded as buttons)
+      Send a joystick axis event to the handler (directions are encoded as buttons)
 
-      @param stick  SDL joystick
-      @param code   Event code
-      @param state  state of code (pressed/released)
+      @param stick  The joystick number
+      @param axis   The joystick axis
+      @param value  The value on the given axis
     */
-    void handleJoyEvent(uInt8 stick, uInt32 code, uInt8 state);
+    void handleJoyAxisEvent(int stick, int axis, int value);
 
     /**
-      Convert joystick motion events to simulated mouse motion events
+      Detects and changes the eventhandler state
 
-      @param stick  SDL joystick
-      @param code   Event code
-      @param state  state of code (pressed/released)
+      @param type  The event
+      @return      True if the state changed, else false
     */
-    void handleMouseWarp(uInt8 stick, uInt8 axis, Int16 value);
-
-    /**
-      Handle joystick movement emulating mouse motion
-
-      @param time  Current millisecond count
-    */
-    void handleJoyMouse(uInt32 time);
+    inline bool eventStateChange(Event::Type type);
 
     /**
       The following methods take care of assigning action mappings.
@@ -305,27 +374,63 @@ class EventHandler
     void setSDLMappings();
     void setKeymap();
     void setJoymap();
+    void setJoyAxisMap();
     void setDefaultKeymap();
     void setDefaultJoymap();
+    void setDefaultJoyAxisMap();
     void saveKeyMapping();
     void saveJoyMapping();
+    void saveJoyAxisMapping();
 
-    bool isValidList(string list, uInt32 length);
+    /**
+      Tests if a mapping list is valid, both by length and by event count.
+
+      @param list    The string containing the mappings, separated by ':'
+      @param map     The result of parsing the string for int mappings
+      @param length  The number of items that should be in the list
+
+      @return      True if valid list, else false
+    */
+    bool isValidList(string& list, IntArray& map, uInt32 length);
+
+    /**
+      Tests if a given event should use continuous/analog values.
+
+      @param event  The event to test for analog processing
+      @return       True if analog, else false
+    */
+    inline bool eventIsAnalog(Event::Type event);
 
     void saveState();
     void changeState();
     void loadState();
     void takeSnapshot();
+    void setEventState(State state);
 
   private:
     // Global OSystem object
     OSystem* myOSystem;
 
+    // Global Event object
+    Event* myEvent;
+
+    // The EventStreamer to use for loading/saving eventstreams
+    EventStreamer* myEventStreamer;
+
+    // Indicates current overlay object
+    DialogContainer* myOverlay;
+
     // Array of key events, indexed by SDLKey
     Event::Type myKeyTable[SDLK_LAST];
 
-    // Array of joystick events
-    Event::Type myJoyTable[kNumJoysticks * kNumJoyButtons];
+    // Array of joystick button events
+    Event::Type myJoyTable[kNumJoysticks][kNumJoyButtons];
+
+    // Array of joystick axis events
+    Event::Type myJoyAxisTable[kNumJoysticks][kNumJoyAxis][2];
+
+    // Array of joystick axis types (analog or digital)
+    JoyAxisType myJoyAxisType[kNumJoysticks][kNumJoyAxis];
 
     // Array of messages for each Event
     string ourMessageTable[Event::LastType];
@@ -338,9 +443,6 @@ class EventHandler
 
     // Indicates the current state of the system (ie, which mode is current)
     State myState;
-
-    // Global Event object
-    Event* myEvent;
 
     // Indicates the current state to use for state loading/saving
     uInt32 myLSState;
@@ -357,28 +459,34 @@ class EventHandler
     // Indicates whether to use launcher mode when exiting a game
     bool myUseLauncherFlag;
 
+    // Indicates whether the joystick emulates the mouse in GUI mode
+    bool myEmulateMouseFlag;
+
     // Indicates whether or not we're in frying mode
     bool myFryingFlag;
 
     // Indicates which paddle the mouse currently emulates
     Int8 myPaddleMode;
 
-    // The current keymap in string form
-    string myKeymapString;
+    // Used for paddle emulation by keyboard or joystick
+    JoyMouse myPaddle[4];
 
-    // The current joymap in string form
-    string myJoymapString;
+    // Type of device on each controller port (based on ROM properties)
+    Controller::Type myController[2];
 
-    // Used for joystick to mouse emulation
-    struct JoyMouse {	
-      int x, y, x_vel, y_vel, x_max, y_max, x_down_count, y_down_count;
-      unsigned int last_time, delay_time, x_down_time, y_down_time;
-    };
+    // Holds static strings for the remap menu
+    static ActionList ourActionList[kActionListSize];
 
-    JoyMouse myJoyMouse;
+    // Lookup table for paddle resistance events
+    static const Event::Type Paddle_Resistance[4];
 
-    // How far the joystick will move the mouse on each frame tick
-    int myMouseMove;
+    // Lookup table for paddle button events
+    static const Event::Type Paddle_Button[4];
+
+    // Static lookup tables for Stelladaptor axis/button support
+    static const Event::Type SA_Axis[2][2][3];
+    static const Event::Type SA_Button[2][2][3];
+    static const Event::Type SA_DrivingValue[2];
 };
 
 #endif

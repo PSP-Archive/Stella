@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Cart3E.cxx,v 1.6 2005/07/30 16:58:22 urchlay Exp $
+// $Id: Cart3E.cxx,v 1.9 2005/12/17 01:23:07 stephena Exp $
 //============================================================================
 
 #include <assert.h>
@@ -39,7 +39,7 @@ Cartridge3E::Cartridge3E(const uInt8* image, uInt32 size)
   }
 
   // Initialize RAM with random values
-  Random random;
+  class Random random;
   for(uInt32 i = 0; i < 32768; ++i)
   {
     myRam[i] = random.next();
@@ -162,6 +162,8 @@ bool Cartridge3E::patch(uInt16 address, uInt8 value)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void Cartridge3E::bank(uInt16 bank)
 { 
+  if(bankLocked) return;
+
   if(bank < 256)
   {
     // Make sure the bank they're asking for is reasonable
@@ -199,6 +201,7 @@ void Cartridge3E::bank(uInt16 bank)
 
     uInt32 offset = bank * 1024;
     uInt16 shift = mySystem->pageShift();
+    uInt32 address;
   
     // Setup the page access methods for the current bank
     System::PageAccess access;
@@ -206,7 +209,7 @@ void Cartridge3E::bank(uInt16 bank)
     access.directPokeBase = 0;
   
     // Map read-port RAM image into the system
-    for(uInt32 address = 0x1000; address < 0x1400; address += (1 << shift))
+    for(address = 0x1000; address < 0x1400; address += (1 << shift))
     {
       access.directPeekBase = &myRam[offset + (address & 0x03FF)];
       mySystem->setPageAccess(address >> shift, access);
@@ -215,7 +218,7 @@ void Cartridge3E::bank(uInt16 bank)
     access.directPeekBase = 0;
 
     // Map write-port RAM image into the system
-    for(uInt32 address = 0x1400; address < 0x1800; address += (1 << shift))
+    for(address = 0x1400; address < 0x1800; address += (1 << shift))
     {
       access.directPokeBase = &myRam[offset + (address & 0x03FF)];
       mySystem->setPageAccess(address >> shift, access);
@@ -242,12 +245,12 @@ bool Cartridge3E::save(Serializer& out)
   try
   {
     out.putString(cart);
-    out.putLong(myCurrentBank);
+    out.putInt(myCurrentBank);
 
     // Output RAM
-    out.putLong(32768);
+    out.putInt(32768);
     for(uInt32 addr = 0; addr < 32768; ++addr)
-      out.putLong(myRam[addr]);
+      out.putInt(myRam[addr]);
   }
   catch(char *msg)
   {
@@ -273,12 +276,12 @@ bool Cartridge3E::load(Deserializer& in)
     if(in.getString() != cart)
       return false;
 
-    myCurrentBank = (uInt16) in.getLong();
+    myCurrentBank = (uInt16) in.getInt();
 
     // Input RAM
-    uInt32 limit = (uInt32) in.getLong();
+    uInt32 limit = (uInt32) in.getInt();
     for(uInt32 addr = 0; addr < limit; ++addr)
-      myRam[addr] = (uInt8) in.getLong();
+      myRam[addr] = (uInt8) in.getInt();
   }
   catch(char *msg)
   {

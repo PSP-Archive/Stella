@@ -13,25 +13,28 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: EventHandler.cxx,v 1.94 2005/09/04 13:26:44 optixx Exp $
+// $Id: EventHandler.cxx,v 1.140 2006/01/05 18:53:23 stephena Exp $
 //============================================================================
 
-#include <algorithm>
 #include <sstream>
 #include <SDL.h>
 
 #include "Event.hxx"
 #include "EventHandler.hxx"
+#include "EventStreamer.hxx"
 #include "FSNode.hxx"
 #include "Settings.hxx"
 #include "System.hxx"
 #include "FrameBuffer.hxx"
 #include "Sound.hxx"
 #include "OSystem.hxx"
+#include "DialogContainer.hxx"
 #include "Menu.hxx"
 #include "CommandMenu.hxx"
 #include "Launcher.hxx"
 #include "GuiUtils.hxx"
+#include "Deserializer.hxx"
+#include "Serializer.hxx"
 #include "bspf.hxx"
 
 #ifdef DEVELOPER_SUPPORT
@@ -42,6 +45,10 @@
   #include "Snapshot.hxx"
 #endif
 
+#ifdef CHEATCODE_SUPPORT
+  #include "CheatManager.hxx"
+#endif
+
 #ifdef MAC_OSX
   extern "C" {
     void handleMacOSXKeypress(int key);
@@ -50,43 +57,55 @@
 
 #define JOY_DEADZONE 3200
 
-#ifdef PSP
-  #define JOYMOUSE_LEFT_BUTTON 2
-#else
-  #define JOYMOUSE_LEFT_BUTTON 0
-#endif
-
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 EventHandler::EventHandler(OSystem* osystem)
   : myOSystem(osystem),
+    myEvent(NULL),
+    myEventStreamer(NULL),
+    myOverlay(NULL),
     myState(S_NONE),
     myLSState(0),
     myPauseFlag(false),
     myQuitFlag(false),
     myGrabMouseFlag(false),
     myUseLauncherFlag(false),
-    myPaddleMode(0),
-    myMouseMove(3)
+    myPaddleMode(0)
 {
+  int i, j;
+
   // Add this eventhandler object to the OSystem
   myOSystem->attach(this);
 
-  // Create the event object which will be used for this handler
-  myEvent = new Event();
+  // Create the streamer used for accessing eventstreams/recordings
+  myEventStreamer = new EventStreamer(myOSystem);
 
-  // Erase the KeyEvent arrays
-  for(Int32 i = 0; i < SDLK_LAST; ++i)
+  // Create the event object which will be used for this handler
+  myEvent = new Event(myEventStreamer);
+
+  // Erase the key mapping array
+  for(i = 0; i < SDLK_LAST; ++i)
   {
     myKeyTable[i] = Event::NoType;
     ourSDLMapping[i] = "";
   }
 
-  // Erase the JoyEvent array
-  for(Int32 i = 0; i < kNumJoysticks * kNumJoyButtons; ++i)
-    myJoyTable[i] = Event::NoType;
+  // Erase the joystick button mapping array
+  for(i = 0; i < kNumJoysticks; ++i)
+    for(j = 0; j < kNumJoyButtons; ++j)
+      myJoyTable[i][j] = Event::NoType;
+
+  // Erase the joystick axis mapping and type arrays
+  for(i = 0; i < kNumJoysticks; ++i)
+  {
+    for(j = 0; j < kNumJoyAxis; ++j)
+    {
+      myJoyAxisTable[i][j][0] = myJoyAxisTable[i][j][1] = Event::NoType;
+      myJoyAxisType[i][j] = JA_NONE;
+    }
+  }
 
   // Erase the Message array
-  for(Int32 i = 0; i < Event::LastType; ++i)
+  for(i = 0; i < Event::LastType; ++i)
     ourMessageTable[i] = "";
 
   // Set unchanging messages
@@ -102,21 +121,21 @@ EventHandler::EventHandler(OSystem* osystem)
   setSDLMappings();
   setKeymap();
   setJoymap();
+  setJoyAxisMap();
   setActionMappings();
 
   myGrabMouseFlag = myOSystem->settings().getBool("grabmouse");
 
-  myFryingFlag = false;
+  setPaddleMode(myOSystem->settings().getInt("paddle"), false);
 
-  memset(&myJoyMouse, 0, sizeof(myJoyMouse));
-  myJoyMouse.delay_time = 25;
+  myFryingFlag = false;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 EventHandler::~EventHandler()
 {
-  if(myEvent)
-    delete myEvent;
+  delete myEvent;
+  delete myEventStreamer;
 
 #ifdef JOYSTICK_SUPPORT
   if(SDL_WasInit(SDL_INIT_JOYSTICK) & SDL_INIT_JOYSTICK)
@@ -131,42 +150,42 @@ EventHandler::~EventHandler()
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Event* EventHandler::event()
-{
-  return myEvent;
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EventHandler::reset(State state)
 {
-  myState = state;
+  setEventState(state);
+
   myLSState = 0;
   myPauseFlag = false;
   myQuitFlag = false;
-  myPaddleMode = 0;
 
   myOSystem->frameBuffer().pause(myPauseFlag);
   myOSystem->sound().mute(myPauseFlag);
   myEvent->clear();
 
-  switch(myState)
-  {
-    case S_LAUNCHER:
-      myUseLauncherFlag = true;
-      break;
+  if(myState == S_LAUNCHER)
+    myUseLauncherFlag = true;
 
-    default:
-      break;
+  // Start paddle emulation in a known state
+  for(int i = 0; i < 4; ++i)
+  {
+    memset(&myPaddle[i], 0, sizeof(JoyMouse));
+    myEvent->set(Paddle_Resistance[i], 1000000);
   }
+  setPaddleSpeed(0, myOSystem->settings().getInt("p1speed"));
+  setPaddleSpeed(1, myOSystem->settings().getInt("p2speed"));
+  setPaddleSpeed(2, myOSystem->settings().getInt("p3speed"));
+  setPaddleSpeed(3, myOSystem->settings().getInt("p4speed"));
+
+  myEventStreamer->reset();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EventHandler::refreshDisplay()
 {
   // These are reset each time the display changes size
-  myJoyMouse.x_max = myOSystem->frameBuffer().imageWidth();
-  myJoyMouse.y_max = myOSystem->frameBuffer().imageHeight();
-  myMouseMove      = myOSystem->frameBuffer().zoomLevel() * 3;
+  DialogContainer::ourJoyMouse.x_max = myOSystem->frameBuffer().imageWidth();
+  DialogContainer::ourJoyMouse.y_max = myOSystem->frameBuffer().imageHeight();
+  DialogContainer::ourJoyMouse.amt = myOSystem->frameBuffer().zoomLevel() * 3;
 
   switch(myState)
   {
@@ -175,24 +194,12 @@ void EventHandler::refreshDisplay()
       break;
 
     case S_MENU:
-      myOSystem->frameBuffer().refresh();
-      myOSystem->menu().refresh();
-      break;
-
     case S_CMDMENU:
       myOSystem->frameBuffer().refresh();
-      myOSystem->commandMenu().refresh();
-      break;
-
     case S_LAUNCHER:
-      myOSystem->launcher().refresh();
-      break;
-
-#ifdef DEVELOPER_SUPPORT
     case S_DEBUGGER:
-      myOSystem->debugger().refresh();
+      myOverlay->refresh();
       break;
-#endif
 
     default:
       break;
@@ -202,9 +209,9 @@ void EventHandler::refreshDisplay()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EventHandler::setupJoysticks()
 {
-#ifdef JOYSTICK_SUPPORT
   bool showinfo = myOSystem->settings().getBool("showinfo");
 
+#ifdef JOYSTICK_SUPPORT
   // Keep track of how many Stelladaptors we've found
   uInt8 saCount = 0;
 
@@ -216,10 +223,12 @@ void EventHandler::setupJoysticks()
   }
 
   // Initialize the joystick subsystem
+  if(showinfo)
+    cerr << "Joystick devices found:" << endl;
   if((SDL_InitSubSystem(SDL_INIT_JOYSTICK) == -1) || (SDL_NumJoysticks() <= 0))
   {
     if(showinfo)
-      cout << "No joysticks present, use the keyboard." << endl;
+      cout << "No joysticks present." << endl;
     return;
   }
 
@@ -235,6 +244,7 @@ void EventHandler::setupJoysticks()
     if(ourJoysticks[i].stick == NULL)
     {
       ourJoysticks[i].type = JT_NONE;
+      ourJoysticks[i].name = "None";
       continue;
     }
 
@@ -243,48 +253,97 @@ void EventHandler::setupJoysticks()
     {
       saCount++;
       if(saCount > 2)  // Ignore more than 2 Stelladaptors
-      {
-        ourJoysticks[i].type = JT_NONE;
         continue;
-      }
-      else if(saCount == 1)
-      {
-        name = "Left Stelladaptor (Left joystick, Paddles 0 and 1, Left driving controller)";
-        ourJoysticks[i].type = JT_STELLADAPTOR_1;
-      }
+      else if(saCount == 1)  // Type will be set by mapStelladaptors()
+        ourJoysticks[i].name = "Stelladaptor 1";
       else if(saCount == 2)
-      {
-        name = "Right Stelladaptor (Right joystick, Paddles 2 and 3, Right driving controller)";
-        ourJoysticks[i].type = JT_STELLADAPTOR_2;
-      }
+        ourJoysticks[i].name = "Stelladaptor 2";
 
       if(showinfo)
-        cout << "Joystick " << i << ": " << name << endl;
+        cout << "  " << i << ": " << ourJoysticks[i].name << endl;
     }
     else
     {
       ourJoysticks[i].type = JT_REGULAR;
+      ourJoysticks[i].name = SDL_JoystickName(i);
 
       if(showinfo)
-        cout << "Joystick " << i << ": " << SDL_JoystickName(i)
+        cout << "  " << i << ": " << ourJoysticks[i].name
              << " with " << SDL_JoystickNumButtons(ourJoysticks[i].stick)
-             << " buttons." << endl;
+             << " buttons" << endl;
     }
-    if(showinfo)
-      cout << endl;
   }
+  if(showinfo)
+    cout << endl;
+
+  // Map the stelladaptors we've found according to the specified ports
+  const string& sa1 = myOSystem->settings().getString("sa1");
+  const string& sa2 = myOSystem->settings().getString("sa2");
+  mapStelladaptors(sa1, sa2);
+#else
+  if(showinfo)
+    cout << "No joysticks present." << endl;
+#endif
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void EventHandler::mapStelladaptors(const string& sa1, const string& sa2)
+{
+#ifdef JOYSTICK_SUPPORT
+  bool showinfo = myOSystem->settings().getBool("showinfo");
+
+  for(int i = 0; i < kNumJoysticks; i++)
+  {
+    if(ourJoysticks[i].name == "Stelladaptor 1")
+    {
+      if(sa1 == "left")
+      {
+        ourJoysticks[i].type = JT_STELLADAPTOR_LEFT;
+        if(showinfo)
+          cout << "  Stelladaptor 1 emulates left joystick port\n";
+      }
+      else if(sa1 == "right")
+      {
+        ourJoysticks[i].type = JT_STELLADAPTOR_RIGHT;
+        if(showinfo)
+          cout << "  Stelladaptor 1 emulates right joystick port\n";
+      }
+    }
+    else if(ourJoysticks[i].name == "Stelladaptor 2")
+    {
+      if(sa2 == "left")
+      {
+        ourJoysticks[i].type = JT_STELLADAPTOR_LEFT;
+        if(showinfo)
+          cout << "  Stelladaptor 2 emulates left joystick port\n";
+      }
+      else if(sa2 == "right")
+      {
+        ourJoysticks[i].type = JT_STELLADAPTOR_RIGHT;
+        if(showinfo)
+          cout << "  Stelladaptor 2 emulates right joystick port\n";
+      }
+    }
+  }
+  if(showinfo)
+    cout << endl;
+
+  myOSystem->settings().setString("sa1", sa1);
+  myOSystem->settings().setString("sa2", sa2);
 #endif
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EventHandler::poll(uInt32 time)
 {
-  SDL_Event event;
-
-  // Handle joystick to mouse emulation
-  handleJoyMouse(time);
+  // Check if we have an event from the eventstreamer
+  // TODO - should we lock out input from the user while getting synthetic events?
+  int type, value;
+  while(myEventStreamer->pollEvent(type, value))
+    myEvent->set((Event::Type)type, value);
 
   // Check for an event
+  SDL_Event event;
   while(SDL_PollEvent(&event))
   {
     switch(event.type)
@@ -306,6 +365,7 @@ void EventHandler::poll(uInt32 time)
           // These keys work in all states
           switch(int(key))
           {
+    #ifndef MAC_OSX
             case SDLK_EQUALS:
               myOSystem->frameBuffer().resize(NextSize);
               break;
@@ -314,7 +374,6 @@ void EventHandler::poll(uInt32 time)
               myOSystem->frameBuffer().resize(PreviousSize);
               break;
 
-    #ifndef MAC_OSX
             case SDLK_RETURN:
               myOSystem->frameBuffer().toggleFullscreen();
               break;
@@ -385,9 +444,37 @@ void EventHandler::poll(uInt32 time)
                 myOSystem->console().enableBits(true);
                 break;
 
-              case SDLK_s:  // Alt-s merges properties into stella.pro
-                myOSystem->console().saveProperties(myOSystem->propertiesOutputFilename(), true);
+              case SDLK_s:  // Alt-s merges properties into user properties (user.pro)
+                saveProperties();
                 break;
+
+// FIXME - these will be removed when a UI is added for event recording
+              case SDLK_e:  // Alt-e starts/stops event recording
+                if(myEventStreamer->isRecording())
+                {
+                  if(myEventStreamer->stopRecording())
+                    myOSystem->frameBuffer().showMessage("Recording stopped");
+                  else
+                    myOSystem->frameBuffer().showMessage("Stop recording error");
+                }
+                else
+                {
+                  if(myEventStreamer->startRecording())
+                    myOSystem->frameBuffer().showMessage("Recording started");
+                  else
+                    myOSystem->frameBuffer().showMessage("Start recording error");
+                }
+                return;
+                break;
+
+              case SDLK_l:  // Alt-l loads a recording
+                if(myEventStreamer->loadRecording())
+                  myOSystem->frameBuffer().showMessage("Playing recording");
+                else
+                  myOSystem->frameBuffer().showMessage("Playing recording error");
+                return;
+                break;
+////////////////////////////////////////////////////////////////////////
             }
           }
         }
@@ -405,6 +492,14 @@ void EventHandler::poll(uInt32 time)
             case SDLK_m:
             case SDLK_SLASH:
               handleMacOSXKeypress(int(key));
+              break;
+
+            case SDLK_EQUALS:
+              myOSystem->frameBuffer().resize(NextSize);
+              break;
+
+            case SDLK_MINUS:
+              myOSystem->frameBuffer().resize(PreviousSize);
               break;
 
             case SDLK_RETURN:
@@ -480,15 +575,31 @@ void EventHandler::poll(uInt32 time)
           }
         }
 
+        // Handle keys which switch eventhandler state
+        // Arrange the logic to take advantage of short-circuit evaluation
+        if(!(kbdControl(mod) || kbdShift(mod) || kbdAlt(mod)) &&
+            state && eventStateChange(myKeyTable[key]))
+          return;
+
         // Otherwise, let the event handler deal with it
-        handleKeyEvent(unicode, key, mod, state);
+        if(myState == S_EMULATE)
+          handleEvent(myKeyTable[key], state);
+        else if(myOverlay != NULL)
+        {
+          // Make sure the unicode field is valid
+          if (key == SDLK_BACKSPACE || key == SDLK_DELETE ||
+             (key >= SDLK_UP && key <= SDLK_PAGEDOWN))
+            unicode = key;
+
+          myOverlay->handleKeyEvent(unicode, key, mod, state);
+        }
 
         break;  // SDL_KEYUP, SDL_KEYDOWN
       }
 
       case SDL_MOUSEMOTION:
         handleMouseMotionEvent(event);
-        break; // SDL_MOUSEMOTION
+        break;  // SDL_MOUSEMOTION
 
       case SDL_MOUSEBUTTONUP:
       case SDL_MOUSEBUTTONDOWN:
@@ -511,235 +622,177 @@ void EventHandler::poll(uInt32 time)
       case SDL_VIDEOEXPOSE:
         refreshDisplay();
         break;  // SDL_VIDEOEXPOSE
-    }
 
 #ifdef JOYSTICK_SUPPORT
-    // Read joystick events and modify event states
-    uInt8  stick;
-    uInt32 code;
-    uInt8  state = 0;
-    Uint8 axis;
-    Uint8 button;
-    Int32 resistance;
-    Sint16 value;
-    JoyType type;
+      case SDL_JOYBUTTONUP:
+      case SDL_JOYBUTTONDOWN:
+      {
+        if(event.jbutton.which >= kNumJoysticks)
+          break;
 
-    if(event.jbutton.which >= kNumJoysticks)
-      return;
-
-    stick = event.jbutton.which;
-    type  = ourJoysticks[stick].type;
-
-    // Figure put what type of joystick we're dealing with
-    // Stelladaptors behave differently, and can't be remapped
-    switch(type)
-    {
-      case JT_NONE:
-        break;
-
-      case JT_REGULAR:
-        switch(event.type)
+        // Stelladaptors handle buttons differently than regular joysticks
+        int type = ourJoysticks[event.jbutton.which].type;
+        switch(type)
         {
-          case SDL_JOYBUTTONUP:
-          case SDL_JOYBUTTONDOWN:
+          case JT_REGULAR:
+          {
             if(event.jbutton.button >= kNumJoyButtons-4)
               return;
 
-            code  = event.jbutton.button;
-            state = event.jbutton.state == SDL_PRESSED ? 1 : 0;
+            int stick  = event.jbutton.which;
+            int button = event.jbutton.button;
+            int state  = event.jbutton.state == SDL_PRESSED ? 1 : 0;
 
-            handleJoyEvent(stick, code, state);
-            break;
+            if(state && eventStateChange(myJoyTable[stick][button]))
+              return;
 
-          case SDL_JOYAXISMOTION:
-            axis = event.jaxis.axis;
-            value = event.jaxis.value;
+            // Determine which mode we're in, then send the event to the appropriate place
+            if(myState == S_EMULATE)
+              handleEvent(myJoyTable[stick][button], state);
+            else if(myOverlay != NULL)
+              myOverlay->handleJoyEvent(stick, button, state);
+            break;  // Regular joystick button
+          }
+
+          case JT_STELLADAPTOR_LEFT:
+          case JT_STELLADAPTOR_RIGHT:
+          {
+            int button = event.jbutton.button;
+            int state  = event.jbutton.state == SDL_PRESSED ? 1 : 0;
+
+            // Since we can't detect what controller is attached to a
+            // Stelladaptor, we only send events based on controller
+            // type in ROM properties
+            switch((int)myController[type-2])
+            {
+              // Send button events for the joysticks
+              case Controller::Joystick:
+                myEvent->set(SA_Button[type-2][button][0], state);
+                break;
+
+              // Send axis events for the paddles
+              case Controller::Paddles:
+                myEvent->set(SA_Button[type-2][button][1], state);
+                break;
+
+              // Send events for the driving controllers
+              case Controller::Driving:
+                myEvent->set(SA_Button[type-2][button][2], state);
+                break;
+            }
+            break;  // Stelladaptor button
+          }
+        }
+        break;  // SDL_JOYBUTTONUP, SDL_JOYBUTTONDOWN
+      }  
+
+      case SDL_JOYAXISMOTION:
+      {
+        if(event.jaxis.which >= kNumJoysticks)
+          break;
+
+        // Stelladaptors handle axis differently than regular joysticks
+        int type = ourJoysticks[event.jbutton.which].type;
+        switch(type)
+        {
+          case JT_REGULAR:
+          {
+            int stick = event.jaxis.which;
+            int axis  = event.jaxis.axis;
+            int value = event.jaxis.value;
 
             // Handle emulation of mouse using the joystick
             if(myState == S_EMULATE)
+              handleJoyAxisEvent(stick, axis, value);
+            else if(myOverlay != NULL)
+              myOverlay->handleJoyAxisEvent(stick, axis, value);
+            break;  // Regular joystick axis
+          }
+
+          case JT_STELLADAPTOR_LEFT:
+          case JT_STELLADAPTOR_RIGHT:
+          {
+            int axis  = event.jaxis.axis;
+            int value = event.jaxis.value;
+
+            // Since we can't detect what controller is attached to a
+            // Stelladaptor, we only send events based on controller
+            // type in ROM properties
+            switch((int)myController[type-2])
             {
-              if(axis == 0)  // x-axis
+              // Send axis events for the joysticks
+              case Controller::Joystick:
+                myEvent->set(SA_Axis[type-2][axis][0], (value < -16384) ? 1 : 0);
+                myEvent->set(SA_Axis[type-2][axis][1], (value > 16384) ? 1 : 0);
+                break;
+
+              // Send axis events for the paddles
+              case Controller::Paddles:
               {
-                handleJoyEvent(stick, kJAxisLeft, (value < -16384) ? 1 : 0);
-                handleJoyEvent(stick, kJAxisRight, (value > 16384) ? 1 : 0);
+                int resistance = (Int32) (1000000.0 * (32767 - value) / 65534);
+                myEvent->set(SA_Axis[type-2][axis][2], resistance);
+                break;
               }
-              else if(axis == 1)  // y-axis
-              {
-                handleJoyEvent(stick, kJAxisUp, (value < -16384) ? 1 : 0);
-                handleJoyEvent(stick, kJAxisDown, (value > 16384) ? 1 : 0);
-              }
+
+              // Send events for the driving controllers
+              case Controller::Driving:
+                if(axis == 1)
+                {
+                  if(value <= -16384-4096)
+                    myEvent->set(SA_DrivingValue[type-2],2);
+                  else if(value > 16384+4096)
+                    myEvent->set(SA_DrivingValue[type-2],1);
+                  else if(value >= 16384-4096)
+                    myEvent->set(SA_DrivingValue[type-2],0);
+                  else
+                    myEvent->set(SA_DrivingValue[type-2],3);
+                }
             }
-            else
-              handleMouseWarp(stick, axis, value);
-            break;
+            break;  // Stelladaptor axis
+          }
         }
-        break;  // Regular joystick
-
-      case JT_STELLADAPTOR_1:
-      case JT_STELLADAPTOR_2:
-        switch(event.type)
-        {
-          case SDL_JOYBUTTONUP:
-          case SDL_JOYBUTTONDOWN:
-            button = event.jbutton.button;
-            state  = event.jbutton.state == SDL_PRESSED ? 1 : 0;
-
-            // Send button events for the joysticks/paddles/driving controllers
-            if(button == 0)
-            {
-              if(type == JT_STELLADAPTOR_1)
-              {
-                handleEvent(Event::JoystickZeroFire, state);
-                handleEvent(Event::DrivingZeroFire, state);
-                handleEvent(Event::PaddleZeroFire, state);
-              }
-              else
-              {
-                handleEvent(Event::JoystickOneFire, state);
-                handleEvent(Event::DrivingOneFire, state);
-                handleEvent(Event::PaddleTwoFire, state);
-              }
-            }
-            else if(button == 1)
-            {
-              if(type == JT_STELLADAPTOR_1)
-                handleEvent(Event::PaddleOneFire, state);
-              else
-                handleEvent(Event::PaddleThreeFire, state);
-            }
-            break;
-
-          case SDL_JOYAXISMOTION:
-            axis = event.jaxis.axis;
-            value = event.jaxis.value;
-
-            // Send axis events for the joysticks
-            handleEvent(SA_Axis[type-2][axis][0], (value < -16384) ? 1 : 0);
-            handleEvent(SA_Axis[type-2][axis][1], (value > 16384) ? 1 : 0);
-
-            // Send axis events for the paddles
-            resistance = (Int32) (1000000.0 * (32767 - value) / 65534);
-            handleEvent(SA_Axis[type-2][axis][2], resistance);
-
-            // Send events for the driving controllers
-            if(axis == 1)
-            {
-              if(value <= -16384-4096)
-                handleEvent(SA_DrivingValue[type-2],2);
-              else if(value > 16384+4096)
-                handleEvent(SA_DrivingValue[type-2],1);
-              else if(value >= 16384-4096)
-                handleEvent(SA_DrivingValue[type-2],0);
-              else
-                handleEvent(SA_DrivingValue[type-2],3);
-            }
-            break;
-        }
-        break;  // Stelladaptor joystick
-
-      default:
-        break;
+        break;  // SDL_JOYAXISMOTION
+      }
+#endif  // JOYSTICK_SUPPORT
     }
-#endif
+  }
+
+  // Handle paddle emulation using joystick or key events
+  for(int i = 0; i < 4; ++i)
+  {
+    if(myPaddle[i].active)
+    {
+      myPaddle[i].x += myPaddle[i].x_amt;
+      if(myPaddle[i].x < 0)
+      {
+        myPaddle[i].x = 0;  continue;
+      }
+      else if(myPaddle[i].x > 1000000)
+      {
+        myPaddle[i].x = 1000000;  continue;
+      }
+      else
+      {
+        int resistance = (int)(1000000.0 * (1000000.0 - myPaddle[i].x) / 1000000.0);
+        myEvent->set(Paddle_Resistance[i], resistance);
+      }
+    }
   }
 
   // Update the current dialog container at regular intervals
   // Used to implement continuous events
-  switch(myState)
-  {
-    case S_MENU:
-      myOSystem->menu().updateTime(time);
-      break;
+  if(myState != S_EMULATE && myOverlay)
+    myOverlay->updateTime(time);
 
-    case S_CMDMENU:
-      myOSystem->commandMenu().updateTime(time);
-      break;
-
-    case S_LAUNCHER:
-      myOSystem->launcher().updateTime(time);
-      break;
-
-#ifdef DEVELOPER_SUPPORT
-    case S_DEBUGGER:
-      myOSystem->debugger().updateTime(time);
-      break;
+#ifdef CHEATCODE_SUPPORT
+  const CheatList& cheats = myOSystem->cheat().perFrame();
+  for(unsigned int i = 0; i < cheats.size(); i++)
+    cheats[i]->evaluate();
 #endif
 
-    default:
-      break;
-  }
-}
-
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void EventHandler::handleKeyEvent(int unicode, SDLKey key, SDLMod mod, uInt8 state)
-{
-  // Determine which mode we're in, then send the event to the appropriate place
-  switch(myState)
-  {
-    case S_EMULATE:
-      if(myKeyTable[key] == Event::MenuMode && state == 1 && !myPauseFlag)
-      {
-        enterMenuMode();
-        return;
-      }
-      else if(myKeyTable[key] == Event::CmdMenuMode && state == 1 && !myPauseFlag)
-      {
-        enterCmdMenuMode();
-        return;
-      }
-      else if(myKeyTable[key] == Event::DebuggerMode && state == 1 && !myPauseFlag)
-      {
-        enterDebugMode();
-        return;
-      }
-      else if(myKeyTable[key] == Event::Fry)
-      {
-        myFryingFlag = bool(state);
-      }
-      else
-        handleEvent(myKeyTable[key], state);
-
-      break;  // S_EMULATE
-
-    case S_MENU:
-      if(myKeyTable[key] == Event::MenuMode && state == 1)
-      {
-        leaveMenuMode();
-        return;
-      }
-      myOSystem->menu().handleKeyEvent(unicode, key, mod, state);
-      break;
-
-    case S_CMDMENU:
-      if(myKeyTable[key] == Event::CmdMenuMode && state == 1)
-      {
-        leaveCmdMenuMode();
-        return;
-      }
-      myOSystem->commandMenu().handleKeyEvent(unicode, key, mod, state);
-      break;
-
-    case S_LAUNCHER:
-      myOSystem->launcher().handleKeyEvent(unicode, key, mod, state);
-      break;
-
-#ifdef DEVELOPER_SUPPORT
-    case S_DEBUGGER:
-      if(myKeyTable[key] == Event::DebuggerMode && state == 1 &&
-         !(kbdAlt(mod) || kbdControl(mod) || kbdShift(mod)))
-      {
-        leaveDebugMode();
-        return;
-      }
-      myOSystem->debugger().handleKeyEvent(unicode, key, mod, state);
-      break;
-#endif
-
-    default:
-      return;
-      break;
-  }
+  // Tell the eventstreamer that another frame has finished
+  // This is used for event recording
+  myEventStreamer->nextFrame();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -747,385 +800,336 @@ void EventHandler::handleMouseMotionEvent(SDL_Event& event)
 {
   // Take window zooming into account
   int x = event.motion.x, y = event.motion.y;
-  myJoyMouse.x = x;
-  myJoyMouse.y = y;
+  DialogContainer::ourJoyMouse.x = x;
+  DialogContainer::ourJoyMouse.y = y;
 
   myOSystem->frameBuffer().translateCoords(&x, &y);
 
   // Determine which mode we're in, then send the event to the appropriate place
-  switch(myState)
+  if(myState == S_EMULATE)
   {
-    case S_EMULATE:
-    {
-      int w = myOSystem->frameBuffer().baseWidth();
+    int w = myOSystem->frameBuffer().baseWidth();
 
-      // Grabmouse introduces some lag into the mouse movement,
-      // so we need to fudge the numbers a bit
-      // FIXME - possibly do x *= 1.5 ??
+    // Grabmouse introduces some lag into the mouse movement,
+    // so we need to fudge the numbers a bit
+    if(myGrabMouseFlag) x = MIN(w, (int) (x * 1.5));
 
-      int resistance = (int)(1000000.0 * (w - x) / w);
-      handleEvent(Paddle_Resistance[myPaddleMode], resistance);
-      break;
-    }
-
-    case S_MENU:
-      myOSystem->menu().handleMouseMotionEvent(x, y, 0);
-      break;
-
-    case S_CMDMENU:
-      myOSystem->commandMenu().handleMouseMotionEvent(x, y, 0);
-      break;
-
-    case S_LAUNCHER:
-      myOSystem->launcher().handleMouseMotionEvent(x, y, 0);
-      break;
-
-#ifdef DEVELOPER_SUPPORT
-    case S_DEBUGGER:
-      myOSystem->debugger().handleMouseMotionEvent(x, y, 0);
-      break;
-#endif
-
-    default:
-      return;
-      break;
+    int resistance = (int)(1000000.0 * (w - x) / w);
+    myEvent->set(Paddle_Resistance[myPaddleMode], resistance);
   }
+  else if(myOverlay)
+    myOverlay->handleMouseMotionEvent(x, y, 0);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void EventHandler::handleMouseButtonEvent(SDL_Event& event, uInt8 state)
+void EventHandler::handleMouseButtonEvent(SDL_Event& event, int state)
 {
   // Determine which mode we're in, then send the event to the appropriate place
-  switch(myState)
+  if(myState == S_EMULATE)
+    myEvent->set(Paddle_Button[myPaddleMode], state);
+  else if(myOverlay)
   {
-    case S_EMULATE:
-      handleEvent(Paddle_Button[myPaddleMode], state);
-      break;
-
-    case S_MENU:
-    case S_CMDMENU:
-    case S_LAUNCHER:
-    case S_DEBUGGER:
-    {
-      // Take window zooming into account
-      Int32 x = event.button.x, y = event.button.y;
+    // Take window zooming into account
+    Int32 x = event.button.x, y = event.button.y;
 //if (state) cerr << "B: x = " << x << ", y = " << y << endl;
-      myOSystem->frameBuffer().translateCoords(&x, &y);
+    myOSystem->frameBuffer().translateCoords(&x, &y);
 //if (state) cerr << "A: x = " << x << ", y = " << y << endl << endl;
-      MouseButton button;
+    MouseButton button;
 
-      if(state == 1)
-      {
-        if(event.button.button == SDL_BUTTON_LEFT)
-          button = EVENT_LBUTTONDOWN;
-        else if(event.button.button == SDL_BUTTON_RIGHT)
-          button = EVENT_RBUTTONDOWN;
-        else if(event.button.button == SDL_BUTTON_WHEELUP)
-          button = EVENT_WHEELUP;
-        else if(event.button.button == SDL_BUTTON_WHEELDOWN)
-          button = EVENT_WHEELDOWN;
-        else
-          break;
-      }
-      else
-      {
-        if(event.button.button == SDL_BUTTON_LEFT)
-          button = EVENT_LBUTTONUP;
-        else if(event.button.button == SDL_BUTTON_RIGHT)
-          button = EVENT_RBUTTONUP;
-        else
-          break;
-      }
-
-      if(myState == S_MENU)
-        myOSystem->menu().handleMouseButtonEvent(button, x, y, state);
-      else if(myState == S_CMDMENU)
-        myOSystem->commandMenu().handleMouseButtonEvent(button, x, y, state);
-      else if(myState == S_LAUNCHER)
-        myOSystem->launcher().handleMouseButtonEvent(button, x, y, state);
-#ifdef DEVELOPER_SUPPORT
-      else
-        myOSystem->debugger().handleMouseButtonEvent(button, x, y, state);
-#endif
-      break;
+    switch(event.button.button)
+    {
+      case SDL_BUTTON_LEFT:
+        button = state ? EVENT_LBUTTONDOWN : EVENT_LBUTTONUP;
+        break;
+      case SDL_BUTTON_RIGHT:
+        button = state ? EVENT_RBUTTONDOWN : EVENT_RBUTTONUP;
+        break;
+      case SDL_BUTTON_WHEELDOWN:
+        button = EVENT_WHEELDOWN;
+        break;
+      case SDL_BUTTON_WHEELUP:
+        button = EVENT_WHEELUP;
+        break;
+      default:
+        return;
     }
-
-    default:
-      break;
+    myOverlay->handleMouseButtonEvent(button, x, y, state);
   }
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void EventHandler::handleJoyMouse(uInt32 time)
+void EventHandler::handleJoyAxisEvent(int stick, int axis, int value)
 {
-  bool mouseAccel = false;  // FIXME - make this a commandline option
+  // Every axis event has two associated values, negative and positive
+  Event::Type eventAxisNeg = myJoyAxisTable[stick][axis][0];
+  Event::Type eventAxisPos = myJoyAxisTable[stick][axis][1];
 
-  if (time >= myJoyMouse.last_time + myJoyMouse.delay_time)
+  // Determine what type of axis we're dealing with
+  // Figure out the actual type if it's undefined
+  JoyAxisType type = myJoyAxisType[stick][axis];
+  if(type == JA_NONE)
   {
-    myJoyMouse.last_time = time;
-    if (myJoyMouse.x_down_count == 1)
+    // TODO - will this always work??
+    if(value > 32767 - JOY_DEADZONE || value < -32767 + JOY_DEADZONE)
+      type = myJoyAxisType[stick][axis] = JA_DIGITAL;
+    else 
+      type = myJoyAxisType[stick][axis] = JA_ANALOG;
+  }
+
+  // Paddle emulation *REALLY* complicates this method
+  if(type == JA_ANALOG)
+  {
+    int idx = -1;
+    switch((int)eventAxisNeg)
     {
-      myJoyMouse.x_down_time = time;
-      myJoyMouse.x_down_count = 2;
+      case Event::PaddleZeroAnalog:
+        idx = 0;
+        break;
+      case Event::PaddleOneAnalog:
+        idx = 1;
+        break;
+      case Event::PaddleTwoAnalog:
+        idx = 2;
+        break;
+      case Event::PaddleThreeAnalog:
+        idx = 3;
+        break;
     }
-    if (myJoyMouse.y_down_count == 1)
+    if(idx >= 0)
     {
-      myJoyMouse.y_down_time = time;
-      myJoyMouse.y_down_count = 2;
-    }
-
-    if (myJoyMouse.x_vel || myJoyMouse.y_vel)
-    {
-      if (myJoyMouse.x_down_count)
-      {
-        if (mouseAccel && time > myJoyMouse.x_down_time + myJoyMouse.delay_time * 12)
-        {
-          if (myJoyMouse.x_vel > 0)
-            myJoyMouse.x_vel++;
-          else
-            myJoyMouse.x_vel--;
-        }
-        else if (time > myJoyMouse.x_down_time + myJoyMouse.delay_time * 8)
-        {
-          if (myJoyMouse.x_vel > 0)
-            myJoyMouse.x_vel = myMouseMove;
-          else
-            myJoyMouse.x_vel = -myMouseMove;
-        }
-      }
-      if (myJoyMouse.y_down_count)
-      {
-        if (mouseAccel && time > myJoyMouse.y_down_time + myJoyMouse.delay_time * 12)
-        {
-          if (myJoyMouse.y_vel > 0)
-            myJoyMouse.y_vel++;
-          else
-            myJoyMouse.y_vel--;
-        }
-        else if (time > myJoyMouse.y_down_time + myJoyMouse.delay_time * 8)
-        {
-          if (myJoyMouse.y_vel > 0)
-            myJoyMouse.y_vel = myMouseMove;
-          else
-            myJoyMouse.y_vel = -myMouseMove;
-        }
-      }
-
-      myJoyMouse.x += myJoyMouse.x_vel;
-      myJoyMouse.y += myJoyMouse.y_vel;
-
-      if (myJoyMouse.x < 0)
-      {
-        myJoyMouse.x = 0;
-        myJoyMouse.x_vel = -1;
-        myJoyMouse.x_down_count = 1;
-      }
-      else if (myJoyMouse.x > myJoyMouse.x_max)
-      {
-        myJoyMouse.x = myJoyMouse.x_max;
-        myJoyMouse.x_vel = 1;
-        myJoyMouse.x_down_count = 1;
-      }
-
-      if (myJoyMouse.y < 0)
-      {
-        myJoyMouse.y = 0;
-        myJoyMouse.y_vel = -1;
-        myJoyMouse.y_down_count = 1;
-      }
-      else if (myJoyMouse.y > myJoyMouse.y_max)
-      {
-        myJoyMouse.y = myJoyMouse.y_max;
-        myJoyMouse.y_vel = 1;
-        myJoyMouse.y_down_count = 1;
-      }
-
-      SDL_WarpMouse(myJoyMouse.x, myJoyMouse.y);
+      int resistance = (int)(1000000.0 * (32767 - value) / 65534);
+      myEvent->set(Paddle_Resistance[idx], resistance);
+      return;
     }
   }
-}
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void EventHandler::handleMouseWarp(uInt8 stick, uInt8 axis, Int16 value)
-{
-  if(value > JOY_DEADZONE)
-    value -= JOY_DEADZONE;
-  else if(value < -JOY_DEADZONE )
-    value += JOY_DEADZONE;
+  // Otherwise, we know the event is digital
+  if(value == 0)
+  {
+    // Turn off both events, since we don't know exactly which one
+    // was previously activated.
+    handleEvent(eventAxisNeg, 0);
+    handleEvent(eventAxisPos, 0);
+  }
   else
-    value = 0;
-
-  if(axis == 0)  // X axis
-  {
-    if (value != 0)
-    {
-      myJoyMouse.x_vel = (value > 0) ? 1 : -1;
-      myJoyMouse.x_down_count = 1;
-    }
-    else
-    {
-      myJoyMouse.x_vel = 0;
-      myJoyMouse.x_down_count = 0;
-    }
-  }
-  else if(axis == 1)  // Y axis
-  {
-    value = -value;
-
-    if (value != 0)
-    {
-      myJoyMouse.y_vel = (-value > 0) ? 1 : -1;
-      myJoyMouse.y_down_count = 1;
-    }
-    else
-    {
-      myJoyMouse.y_vel = 0;
-      myJoyMouse.y_down_count = 0;
-    }
-  }
+    handleEvent(value < 0 ? eventAxisNeg : eventAxisPos, 1);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void EventHandler::handleJoyEvent(uInt8 stick, uInt32 code, uInt8 state)
+void EventHandler::handleEvent(Event::Type event, int state)
 {
-  // Joystick button zero acts as left mouse button and cannot be remapped
-  if(myState != S_EMULATE && code == JOYMOUSE_LEFT_BUTTON)
-  {
-    // This button acts as mouse button zero, and can never be remapped
-    SDL_MouseButtonEvent mouseEvent;
-    mouseEvent.type   = state ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
-    mouseEvent.button = SDL_BUTTON_LEFT;
-    mouseEvent.state  = state ? SDL_PRESSED : SDL_RELEASED;
-    mouseEvent.x      = myJoyMouse.x;
-    mouseEvent.y      = myJoyMouse.y;
-
-    handleMouseButtonEvent((SDL_Event&)mouseEvent, state);
-    return;
-  }
-
-  // Determine which mode we're in, then send the event to the appropriate place
-  // FIXME - this is almost exactly the same as handleKeyEvent
-  //         the similar code should be handled in handleEvent ...
-  Event::Type event = myJoyTable[stick*kNumJoyButtons + code];
-  switch(myState)
-  {
-    case S_EMULATE:
-      if(event == Event::MenuMode && state == 1 && !myPauseFlag)
-      {
-        enterMenuMode();
-        return;
-      }
-      else if(event == Event::CmdMenuMode && state == 1 && !myPauseFlag)
-      {
-        enterCmdMenuMode();
-        return;
-      }
-      else if(event == Event::DebuggerMode && state == 1 && !myPauseFlag)
-      {
-        enterDebugMode();
-        return;
-      }
-      else
-        handleEvent(event, state);
-
-      break;  // S_EMULATE
-
-    case S_MENU:
-      if(event == Event::MenuMode && state == 1)
-      {
-        leaveMenuMode();
-        return;
-      }
-      myOSystem->menu().handleJoyEvent(stick, code, state);
-      break;
-
-    case S_CMDMENU:
-      if(event == Event::CmdMenuMode && state == 1)
-      {
-        leaveCmdMenuMode();
-        return;
-      }
-      myOSystem->commandMenu().handleJoyEvent(stick, code, state);
-      break;
-
-    default:
-      break;
-  }
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void EventHandler::handleEvent(Event::Type event, Int32 state)
-{
-  // Ignore unmapped events
-  if(event == Event::NoType)
-    return;
-
   // Take care of special events that aren't part of the emulation core
-  if(state == 1)
+  // or need to be preprocessed before passing them on
+  switch((int)event)
   {
-    if(event == Event::SaveState)
-    {
-      saveState();
+    ////////////////////////////////////////////////////////////////////////
+    // Make sure that simultaneous events that are impossible on a real
+    // Atari 2600 cannot happen.  Maybe this should be in the Event class??
+    case Event::JoystickZeroUp:
+      if(state) myEvent->set(Event::JoystickZeroDown, 0);
+      break;
+    case Event::JoystickZeroDown:
+      if(state) myEvent->set(Event::JoystickZeroUp, 0);
+      break;
+    case Event::JoystickZeroLeft:
+      if(state) myEvent->set(Event::JoystickZeroRight, 0);
+      break;
+    case Event::JoystickZeroRight:
+      if(state) myEvent->set(Event::JoystickZeroLeft, 0);
+      break;
+    case Event::JoystickOneUp:
+      if(state) myEvent->set(Event::JoystickOneDown, 0);
+      break;
+    case Event::JoystickOneDown:
+      if(state) myEvent->set(Event::JoystickOneUp, 0);
+      break;
+    case Event::JoystickOneLeft:
+      if(state) myEvent->set(Event::JoystickOneRight, 0);
+      break;
+    case Event::JoystickOneRight:
+      if(state) myEvent->set(Event::JoystickOneLeft, 0);
+      break;
+    ////////////////////////////////////////////////////////////////////////
+
+    case Event::PaddleZeroDecrease:
+      myPaddle[0].active = (bool) state;
+      myPaddle[0].x_amt  = -myPaddle[0].amt;
       return;
-    }
-    else if(event == Event::ChangeState)
-    {
-      changeState();
+    case Event::PaddleZeroIncrease:
+      myPaddle[0].active = (bool) state;
+      myPaddle[0].x_amt  = myPaddle[0].amt;
       return;
-    }
-    else if(event == Event::LoadState)
-    {
-      loadState();
+    case Event::PaddleOneDecrease:
+      myPaddle[1].active = (bool) state;
+      myPaddle[1].x_amt  = -myPaddle[1].amt;
       return;
-    }
-    else if(event == Event::TakeSnapshot)
-    {
-      takeSnapshot();
+    case Event::PaddleOneIncrease:
+      myPaddle[1].active = (bool) state;
+      myPaddle[1].x_amt  = myPaddle[1].amt;
       return;
-    }
-    else if(event == Event::Pause)
-    {
-      myPauseFlag = !myPauseFlag;
-      myOSystem->frameBuffer().pause(myPauseFlag);
-      myOSystem->sound().mute(myPauseFlag);
+    case Event::PaddleTwoDecrease:
+      myPaddle[2].active = (bool) state;
+      myPaddle[2].x_amt  = -myPaddle[2].amt;
       return;
-    }
-    else if(event == Event::LauncherMode)
-    {
+    case Event::PaddleTwoIncrease:
+      myPaddle[2].active = (bool) state;
+      myPaddle[2].x_amt  = myPaddle[2].amt;
+      return;
+    case Event::PaddleThreeDecrease:
+      myPaddle[3].active = (bool) state;
+      myPaddle[3].x_amt  = -myPaddle[3].amt;
+      return;
+    case Event::PaddleThreeIncrease:
+      myPaddle[3].active = (bool) state;
+      myPaddle[3].x_amt  = myPaddle[3].amt;
+      return;
+
+    case Event::NoType:  // Ignore unmapped events
+      return;
+
+    case Event::Fry:
+      if(!myPauseFlag)
+        myFryingFlag = bool(state);
+      return;
+
+    case Event::VolumeDecrease:
+    case Event::VolumeIncrease:
+      if(state && !myPauseFlag)
+        myOSystem->sound().adjustVolume(event == Event::VolumeIncrease ? 1 : -1);
+      return;
+
+    case Event::SaveState:
+      if(state && !myPauseFlag) saveState();
+      return;
+
+    case Event::ChangeState:
+      if(state && !myPauseFlag) changeState();
+      return;
+
+    case Event::LoadState:
+      if(state && !myPauseFlag) loadState();
+      return;
+
+    case Event::TakeSnapshot:
+      if(state && !myPauseFlag) takeSnapshot();
+      return;
+
+    case Event::Pause:
+      if(state)
+      {
+        myPauseFlag = !myPauseFlag;
+        myOSystem->frameBuffer().pause(myPauseFlag);
+        myOSystem->sound().mute(myPauseFlag);
+      }
+      return;
+
+    case Event::LauncherMode:
       // ExitGame will only work when we've launched stella using the ROM
       // launcher.  Otherwise, the only way to exit the main loop is to Quit.
-      if(myState == S_EMULATE && myUseLauncherFlag)
+      if(myState == S_EMULATE && myUseLauncherFlag && state)
       {
         myOSystem->settings().saveConfig();
         myOSystem->createLauncher();
-        return;
       }
-    }
-    else if(event == Event::Quit)
-    {
-      myQuitFlag = true;
+      return;
+
+    case Event::Quit:
+      if(state) myQuitFlag = true;
       myOSystem->settings().saveConfig();
       return;
-    }
-
-    if(ourMessageTable[event] != "")
-      myOSystem->frameBuffer().showMessage(ourMessageTable[event]);
   }
+
+  if(state && ourMessageTable[event] != "")
+    myOSystem->frameBuffer().showMessage(ourMessageTable[event]);
 
   // Otherwise, pass it to the emulation core
   myEvent->set(event, state);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+bool EventHandler::eventStateChange(Event::Type type)
+{
+  bool handled = true;
+
+  switch(type)
+  {
+    case Event::MenuMode:
+      if(!myPauseFlag)
+      {
+        if(myState == S_EMULATE)
+          enterMenuMode(S_MENU);
+        else if(myState == S_MENU)
+          leaveMenuMode();
+        else
+          handled = false;
+      }
+      else
+        handled = false;
+      break;
+
+    case Event::CmdMenuMode:
+      if(!myPauseFlag)
+      {
+        if(myState == S_EMULATE)
+          enterMenuMode(S_CMDMENU);
+        else if(myState == S_CMDMENU)
+          leaveMenuMode();
+        else
+          handled = false;
+      }
+      else
+        handled = false;
+      break;
+
+    case Event::DebuggerMode:
+      if(myState == S_EMULATE)
+        enterDebugMode();
+      else if(myState == S_DEBUGGER)
+        leaveDebugMode();
+      else
+        handled = false;
+      break;
+
+    default:
+      handled = false;
+  }
+
+  return handled;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void EventHandler::createMouseMotionEvent(int x, int y)
+{
+  SDL_WarpMouse(x, y);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void EventHandler::createMouseButtonEvent(int x, int y, int state)
+{
+  // Synthesize an left mouse button press/release event
+  SDL_MouseButtonEvent mouseEvent;
+  mouseEvent.type   = state ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
+  mouseEvent.button = SDL_BUTTON_LEFT;
+  mouseEvent.state  = state ? SDL_PRESSED : SDL_RELEASED;
+  mouseEvent.x      = x;
+  mouseEvent.y      = y;
+
+  handleMouseButtonEvent((SDL_Event&)mouseEvent, state);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EventHandler::setActionMappings()
 {
+  int i, j, stick, button, axis, dir;
+  ostringstream buf;
+
   // Fill the ActionList with the current key and joystick mappings
-  for(Int32 i = 0; i < 62; ++i)
+  for(i = 0; i < kActionListSize; ++i)
   {
     Event::Type event = ourActionList[i].event;
     ourActionList[i].key = "None";
     string key = "";
-    for(uInt32 j = 0; j < SDLK_LAST; ++j)   // size of myKeyTable
+    for(j = 0; j < SDLK_LAST; ++j)   // key mapping
     {
       if(myKeyTable[j] == event)
       {
@@ -1135,40 +1139,49 @@ void EventHandler::setActionMappings()
           key = key + ", " + ourSDLMapping[j];
       }
     }
-    for(uInt32 j = 0; j < kNumJoysticks * kNumJoyButtons; ++j)
+    // Joystick button mapping/labeling
+    for(stick = 0; stick < kNumJoysticks; ++stick)
     {
-      if(myJoyTable[j] == event)
+      for(button = 0; button < kNumJoyButtons; ++button)
       {
-        ostringstream joyevent;
-        uInt32 stick  = j / kNumJoyButtons;
-        uInt32 button = j % kNumJoyButtons;
-
-        switch(button)
+        if(myJoyTable[stick][button] == event)
         {
-          case kJAxisUp:
-            joyevent << "J" << stick << " UP";
-            break;
-
-          case kJAxisDown:
-            joyevent << "J" << stick << " DOWN";
-            break;
-
-          case kJAxisLeft:
-            joyevent << "J" << stick << " LEFT";
-            break;
-
-          case kJAxisRight:
-            joyevent << "J" << stick << " RIGHT";
-            break;
-
-          default:
-            joyevent << "J" << stick << " B" << button;
-            break;
+          buf.str("");
+          buf << "J" << stick << " B" << button;
+          if(key == "")
+            key = key + buf.str();
+          else
+            key = key + ", " + buf.str();
         }
-        if(key == "")
-          key = key + joyevent.str();
-        else
-          key = key + ", " + joyevent.str();
+      }
+    }
+    // Joystick axis mapping/labeling
+    for(stick = 0; stick < kNumJoysticks; ++stick)
+    {
+      for(axis = 0; axis < kNumJoyAxis; ++axis)
+      {
+        for(dir = 0; dir < 2; ++dir)
+        {
+          if(myJoyAxisTable[stick][axis][dir] == event)
+          {
+            buf.str("");
+            buf << "J" << stick << " axis " << axis;
+            if(eventIsAnalog(event))
+            {
+              dir = 2;  // Immediately exit the inner loop after this iteration
+              buf << " abs";
+            }
+            else if(dir == 0)
+              buf << " neg";
+            else
+              buf << " pos";
+
+            if(key == "")
+              key = key + buf.str();
+            else
+              key = key + ", " + buf.str();
+          }
+        }
       }
     }
 
@@ -1195,22 +1208,14 @@ void EventHandler::setActionMappings()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EventHandler::setKeymap()
 {
-  // Since istringstream swallows whitespace, we have to make the
-  // delimiters be spaces
   string list = myOSystem->settings().getString("keymap");
-  replace(list.begin(), list.end(), ':', ' ');
+  IntArray map;
 
-  if(isValidList(list, SDLK_LAST))
+  if(isValidList(list, map, SDLK_LAST))
   {
-    istringstream buf(list);
-    string key;
-
     // Fill the keymap table with events
     for(Int32 i = 0; i < SDLK_LAST; ++i)
-    {
-      buf >> key;
-      myKeyTable[i] = (Event::Type) atoi(key.c_str());
-    }
+      myKeyTable[i] = (Event::Type) map[i];
   }
   else
     setDefaultKeymap();
@@ -1219,32 +1224,45 @@ void EventHandler::setKeymap()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EventHandler::setJoymap()
 {
-  // Since istringstream swallows whitespace, we have to make the
-  // delimiters be spaces
   string list = myOSystem->settings().getString("joymap");
-  replace(list.begin(), list.end(), ':', ' ');
+  IntArray map;
 
-  if(isValidList(list, kNumJoysticks*kNumJoyButtons))
+  if(isValidList(list, map, kNumJoysticks*kNumJoyButtons))
   {
-    istringstream buf(list);
-    string key;
-
     // Fill the joymap table with events
-    for(Int32 i = 0; i < kNumJoysticks*kNumJoyButtons; ++i)
-    {
-      buf >> key;
-      myJoyTable[i] = (Event::Type) atoi(key.c_str());
-    }
+    int idx = 0;
+    for(int i = 0; i < kNumJoysticks; ++i)
+      for(int j = 0; j < kNumJoyAxis; ++j)
+        myJoyTable[i][j] = (Event::Type) map[idx++];
   }
   else
     setDefaultJoymap();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void EventHandler::addKeyMapping(Event::Type event, uInt16 key)
+void EventHandler::setJoyAxisMap()
+{
+  string list = myOSystem->settings().getString("joyaxismap");
+  IntArray map;
+
+  if(isValidList(list, map, kNumJoysticks*kNumJoyAxis*2))
+  {
+    // Fill the joyaxismap table with events
+    int idx = 0;
+    for(int i = 0; i < kNumJoysticks; ++i)
+      for(int j = 0; j < kNumJoyAxis; ++j)
+        for(int k = 0; k < 2; ++k)
+          myJoyAxisTable[i][j][k] = (Event::Type) map[idx++];
+  }
+  else
+    setDefaultJoyAxisMap();
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void EventHandler::addKeyMapping(Event::Type event, int key)
 {
   // These keys cannot be remapped.
-  if(key == SDLK_TAB || key == SDLK_ESCAPE)
+  if(key == SDLK_TAB)
     return;
 
   myKeyTable[key] = event;
@@ -1254,28 +1272,83 @@ void EventHandler::addKeyMapping(Event::Type event, uInt16 key)
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void EventHandler::addJoyMapping(Event::Type event, uInt8 stick, uInt32 code)
+void EventHandler::setDefaultJoyMapping(Event::Type event, int stick, int button)
 {
-  myJoyTable[stick * kNumJoyButtons + code] = event;
-  saveJoyMapping();
+  if(stick >= 0 && stick < kNumJoysticks &&
+     button >= 0 && button < kNumJoyButtons &&
+     event >= 0 && event < Event::LastType)
+    myJoyTable[stick][button] = event;
+}
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void EventHandler::addJoyMapping(Event::Type event, int stick, int button)
+{
+  setDefaultJoyMapping(event, stick, button);
+
+  saveJoyMapping();
+  setActionMappings();
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void EventHandler::setDefaultJoyAxisMapping(Event::Type event, int stick,
+                                            int axis, int value)
+{
+  if(stick >= 0 && stick < kNumJoysticks &&
+     axis >= 0 && axis < kNumJoyAxis &&
+     event >= 0 && event < Event::LastType)
+  {
+    // This confusing code is because each axis has two associated values,
+    // but analog events only affect one of the axis.
+    if(eventIsAnalog(event))
+      myJoyAxisTable[stick][axis][0] = myJoyAxisTable[stick][axis][1] = event;
+    else
+    {
+      // Otherwise, turn off the analog event(s) for this axis
+      if(eventIsAnalog(myJoyAxisTable[stick][axis][0]))
+        myJoyAxisTable[stick][axis][0] = Event::NoType;
+      if(eventIsAnalog(myJoyAxisTable[stick][axis][1]))
+        myJoyAxisTable[stick][axis][1] = Event::NoType;
+    
+      myJoyAxisTable[stick][axis][(value > 0)] = event;
+    }
+  }
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void EventHandler::addJoyAxisMapping(Event::Type event, int stick, int axis,
+                                     int value)
+{
+  setDefaultJoyAxisMapping(event, stick, axis, value);
+
+  saveJoyAxisMapping();
   setActionMappings();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EventHandler::eraseMapping(Event::Type event)
 {
+  int i, j, k;
+
   // Erase the KeyEvent arrays
-  for(Int32 i = 0; i < SDLK_LAST; ++i)
-    if(myKeyTable[i] == event && i != SDLK_TAB && i != SDLK_ESCAPE)
+  for(i = 0; i < SDLK_LAST; ++i)
+    if(myKeyTable[i] == event && i != SDLK_TAB)
       myKeyTable[i] = Event::NoType;
   saveKeyMapping();
 
   // Erase the JoyEvent array
-  for(Int32 i = 0; i < kNumJoysticks * kNumJoyButtons; ++i)
-    if(myJoyTable[i] == event)
-      myJoyTable[i] = Event::NoType;
+  for(i = 0; i < kNumJoysticks; ++i)
+    for(j = 0; j < kNumJoyButtons; ++j)
+      if(myJoyTable[i][j] == event)
+        myJoyTable[i][j] = Event::NoType;
   saveJoyMapping();
+
+  // Erase the JoyAxisEvent array
+  for(i = 0; i < kNumJoysticks; ++i)
+    for(j = 0; j < kNumJoyAxis; ++j)
+      for(k = 0; k < 2; ++k)
+        if(myJoyAxisTable[i][j][k] == event)
+          myJoyAxisTable[i][j][k] = Event::NoType;
+  saveJoyAxisMapping();
 
   setActionMappings();
 }
@@ -1285,6 +1358,7 @@ void EventHandler::setDefaultMapping()
 {
   setDefaultKeymap();
   setDefaultJoymap();
+  setDefaultJoyAxisMap();
 
   setActionMappings();
 }
@@ -1360,11 +1434,11 @@ void EventHandler::setDefaultKeymap()
   myKeyTable[ SDLK_F11 ]       = Event::LoadState;
   myKeyTable[ SDLK_F12 ]       = Event::TakeSnapshot;
   myKeyTable[ SDLK_PAUSE ]     = Event::Pause;
+  myKeyTable[ SDLK_BACKSPACE ] = Event::Fry;
   myKeyTable[ SDLK_TAB ]       = Event::MenuMode;
   myKeyTable[ SDLK_BACKSLASH ] = Event::CmdMenuMode;
   myKeyTable[ SDLK_BACKQUOTE ] = Event::DebuggerMode;
   myKeyTable[ SDLK_ESCAPE ]    = Event::LauncherMode;
-  myKeyTable[ SDLK_BACKSPACE ] = Event::Fry;
 
   saveKeyMapping();
 }
@@ -1372,53 +1446,35 @@ void EventHandler::setDefaultKeymap()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EventHandler::setDefaultJoymap()
 {
-  uInt32 i;
-
   // Erase all mappings
-  for(i = 0; i < kNumJoysticks * kNumJoyButtons; ++i)
-    myJoyTable[i] = Event::NoType;
+  for(int i = 0; i < kNumJoysticks; ++i)
+    for(int j = 0; j < kNumJoyButtons; ++j)
+      myJoyTable[i][j] = Event::NoType;
 
-  // Left joystick
-  i = 0 * kNumJoyButtons;
-  myJoyTable[i + kJAxisUp]    = Event::JoystickZeroUp;
-  myJoyTable[i + kJAxisDown]  = Event::JoystickZeroDown;
-  myJoyTable[i + kJAxisLeft]  = Event::JoystickZeroLeft;
-  myJoyTable[i + kJAxisRight] = Event::JoystickZeroRight;
-  myJoyTable[i + 0]           = Event::JoystickZeroFire;
-
-#ifdef PSP
-  myJoyTable[i + 0]  = Event::TakeSnapshot;      // Triangle
-  myJoyTable[i + 1]  = Event::LoadState;         // Circle
-  myJoyTable[i + 2]  = Event::JoystickZeroFire;  // Cross
-  myJoyTable[i + 3]  = Event::SaveState;         // Square
-  myJoyTable[i + 4]  = Event::MenuMode;          // Left trigger
-  myJoyTable[i + 5]  = Event::CmdMenuMode;       // Right trigger
-  myJoyTable[i + 6]  = Event::JoystickZeroDown;  // Down
-  myJoyTable[i + 7]  = Event::JoystickZeroLeft;  // Left
-  myJoyTable[i + 8]  = Event::JoystickZeroUp;    // Up
-  myJoyTable[i + 9]  = Event::JoystickZeroRight; // Right
-  myJoyTable[i + 10] = Event::ConsoleSelect;     // Select
-  myJoyTable[i + 11] = Event::ConsoleReset;      // Start
-  myJoyTable[i + 12] = Event::NoType;            // Home
-  myJoyTable[i + 13] = Event::NoType;            // Hold
-#endif
-
-  // Right joystick
-  i = 1 * kNumJoyButtons;
-  myJoyTable[i + kJAxisUp]    = Event::JoystickOneUp;
-  myJoyTable[i + kJAxisDown]  = Event::JoystickOneDown;
-  myJoyTable[i + kJAxisLeft]  = Event::JoystickOneLeft;
-  myJoyTable[i + kJAxisRight] = Event::JoystickOneRight;
-  myJoyTable[i + 0]     = Event::JoystickOneFire;
-
+  myOSystem->setDefaultJoymap();
   saveJoyMapping();
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void EventHandler::setDefaultJoyAxisMap()
+{
+  // Erase all mappings
+  for(int i = 0; i < kNumJoysticks; ++i)
+    for(int j = 0; j < kNumJoyAxis; ++j)
+      for(int k = 0; k < 2; ++k)
+        myJoyAxisTable[i][j][k] = Event::NoType;
+
+  myOSystem->setDefaultJoyAxisMap();
+  saveJoyAxisMapping();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EventHandler::saveKeyMapping()
 {
   // Iterate through the keymap table and create a colon-separated list
+  // Prepend the event count, so we can check it on next load
   ostringstream keybuf;
+  keybuf << Event::LastType << ":";
   for(uInt32 i = 0; i < SDLK_LAST; ++i)
     keybuf << myKeyTable[i] << ":";
 
@@ -1429,46 +1485,90 @@ void EventHandler::saveKeyMapping()
 void EventHandler::saveJoyMapping()
 {
   // Iterate through the joymap table and create a colon-separated list
-  ostringstream joybuf;
-  for(Int32 i = 0; i < kNumJoysticks * kNumJoyButtons; ++i)
-    joybuf << myJoyTable[i] << ":";
+  // Prepend the event count, so we can check it on next load
+  ostringstream buf;
+  buf << Event::LastType << ":";
+  for(int i = 0; i < kNumJoysticks; ++i)
+    for(int j = 0; j < kNumJoyButtons; ++j)
+      buf << myJoyTable[i][j] << ":";
 
-  myOSystem->settings().setString("joymap", joybuf.str());
+  myOSystem->settings().setString("joymap", buf.str());
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-bool EventHandler::isValidList(string list, uInt32 length)
+void EventHandler::saveJoyAxisMapping()
 {
-  // Rudimentary check to see if the list contains 'length' keys
-  istringstream buf(list);
+  // Iterate through the joyaxismap table and create a colon-separated list
+  // Prepend the event count, so we can check it on next load
+  ostringstream buf;
+  buf << Event::LastType << ":";
+  for(int i = 0; i < kNumJoysticks; ++i)
+    for(int j = 0; j < kNumJoyAxis; ++j)
+      for(int k = 0; k < 2; ++k)
+        buf << myJoyAxisTable[i][j][k] << ":";
+
+  myOSystem->settings().setString("joyaxismap", buf.str());
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+bool EventHandler::isValidList(string& list, IntArray& map, uInt32 length)
+{
   string key;
-  uInt32 i = 0;
+  Event::Type event;
 
-  while(buf >> key)
-    i++;
+  // Since istringstream swallows whitespace, we have to make the
+  // delimiters be spaces
+  replace(list.begin(), list.end(), ':', ' ');
+  istringstream buf(list);
 
-  return (i == length);
+  // Get event count, which should be the first int in the list
+  buf >> key;
+  event = (Event::Type) atoi(key.c_str());
+  if(event == Event::LastType)
+    while(buf >> key)
+      map.push_back(atoi(key.c_str()));
+
+  return (event == Event::LastType && map.size() == length);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+inline bool EventHandler::eventIsAnalog(Event::Type event)
+{
+  switch((int)event)
+  {
+    case Event::PaddleZeroAnalog:
+    case Event::PaddleOneAnalog:
+    case Event::PaddleTwoAnalog:
+    case Event::PaddleThreeAnalog:
+      return true;
+    default:
+      return false;
+  }
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EventHandler::saveState()
 {
-  // Do a state save using the System
   string md5 = myOSystem->console().properties().get("Cartridge.MD5");
   ostringstream buf;
   buf << myOSystem->stateDir() << BSPF_PATH_SEPARATOR << md5 << ".st" << myLSState;
 
-  int result = myOSystem->console().system().saveState(buf.str(), md5);
+  // Make sure the file can be opened for writing
+  Serializer out;
+  if(!out.open(buf.str()))
+  {
+    myOSystem->frameBuffer().showMessage("Error saving state file");
+    return;
+  }
 
-  // Print appropriate message
+  // Do a state save using the System
   buf.str("");
-  if(result == 1)
+  if(myOSystem->console().system().saveState(md5, out))
     buf << "State " << myLSState << " saved";
-  else if(result == 2)
+  else
     buf << "Error saving state " << myLSState;
-  else if(result == 3)
-    buf << "Invalid state " << myLSState << " file";
 
+  out.close();
   myOSystem->frameBuffer().showMessage(buf.str());
 }
 
@@ -1482,10 +1582,7 @@ void EventHandler::saveState(int state)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EventHandler::changeState()
 {
-  if(myLSState == 9)
-    myLSState = 0;
-  else
-    ++myLSState;
+  myLSState = (myLSState + 1) % 10;
 
   // Print appropriate message
   ostringstream buf;
@@ -1497,22 +1594,28 @@ void EventHandler::changeState()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EventHandler::loadState()
 {
-  // Do a state save using the System
   string md5 = myOSystem->console().properties().get("Cartridge.MD5");
   ostringstream buf;
   buf << myOSystem->stateDir() << BSPF_PATH_SEPARATOR << md5 << ".st" << myLSState;
 
-  int result = myOSystem->console().system().loadState(buf.str(), md5);
-
-  // Print appropriate message
-  buf.str("");
-  if(result == 1)
-    buf << "State " << myLSState << " loaded";
-  else if(result == 2)
+  // Make sure the file can be opened for reading
+  Deserializer in;
+  if(!in.open(buf.str()))
+  {
+    buf.str("");
     buf << "Error loading state " << myLSState;
-  else if(result == 3)
+    myOSystem->frameBuffer().showMessage(buf.str());
+    return;
+  }
+
+  // Do a state load using the System
+  buf.str("");
+  if(myOSystem->console().system().loadState(md5, in))
+    buf << "State " << myLSState << " loaded";
+  else
     buf << "Invalid state " << myLSState << " file";
 
+  in.close();
   myOSystem->frameBuffer().showMessage(buf.str());
 }
 
@@ -1536,8 +1639,9 @@ void EventHandler::takeSnapshot()
   string sspath = myOSystem->settings().getString("ssdir");
   string ssname = myOSystem->settings().getString("ssname");
 
-  if(sspath.substr(sspath.length()-1) != BSPF_PATH_SEPARATOR)
-    sspath += BSPF_PATH_SEPARATOR;
+  if(sspath.length() > 0)
+    if(sspath.substr(sspath.length()-1) != BSPF_PATH_SEPARATOR)
+      sspath += BSPF_PATH_SEPARATOR;
 
   if(ssname == "romname")
     sspath += myOSystem->console().properties().get("Cartridge.Name");
@@ -1580,8 +1684,11 @@ void EventHandler::takeSnapshot()
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void EventHandler::setPaddleMode(uInt32 num, bool showmessage)
+void EventHandler::setPaddleMode(int num, bool showmessage)
 {
+  if(num < 0 || num > 3)
+    return;
+
   myPaddleMode = num;
 
   if(showmessage)
@@ -1595,10 +1702,22 @@ void EventHandler::setPaddleMode(uInt32 num, bool showmessage)
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void EventHandler::enterMenuMode()
+void EventHandler::setPaddleSpeed(int num, int speed)
 {
-  myState = S_MENU;
-  myOSystem->menu().reStack();
+  if(num < 0 || num > 3 || speed < 0 || speed > 100)
+    return;
+
+  myPaddle[num].amt = (int) (20000 + speed/100.0 * 50000);
+  ostringstream buf;
+  buf << "p" << num+1 << "speed";
+  myOSystem->settings().setInt(buf.str(), speed);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void EventHandler::enterMenuMode(State state)
+{
+  setEventState(state);
+  myOverlay->reStack();
 
   refreshDisplay();
 
@@ -1610,32 +1729,7 @@ void EventHandler::enterMenuMode()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EventHandler::leaveMenuMode()
 {
-  myState = S_EMULATE;
-
-  refreshDisplay();
-
-  myOSystem->frameBuffer().setCursorState();
-  myOSystem->sound().mute(false);
-  myEvent->clear();
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void EventHandler::enterCmdMenuMode()
-{
-  myState = S_CMDMENU;
-  myOSystem->commandMenu().reStack();
-
-  refreshDisplay();
-
-  myOSystem->frameBuffer().setCursorState();
-  myOSystem->sound().mute(true);
-  myEvent->clear();
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void EventHandler::leaveCmdMenuMode()
-{
-  myState = S_EMULATE;
+  setEventState(S_EMULATE);
 
   refreshDisplay();
 
@@ -1651,9 +1745,9 @@ bool EventHandler::enterDebugMode()
   if(myState == S_DEBUGGER)
     return false;
 
-  myState = S_DEBUGGER;
+  setEventState(S_DEBUGGER);
   myOSystem->createFrameBuffer();
-  myOSystem->debugger().reStack();
+  myOverlay->reStack();
   myOSystem->frameBuffer().setCursorState();
   myEvent->clear();
 
@@ -1684,7 +1778,7 @@ void EventHandler::leaveDebugMode()
   // Make sure debugger quits in a consistent state
   myOSystem->debugger().setQuitState();
 
-  myState = S_EMULATE;
+  setEventState(S_EMULATE);
   myOSystem->createFrameBuffer();
   refreshDisplay();
   myOSystem->frameBuffer().setCursorState();
@@ -1693,6 +1787,50 @@ void EventHandler::leaveDebugMode()
   if(myPauseFlag)  // Un-Pause when leaving debugger mode
     handleEvent(Event::Pause, 1);
 #endif
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void EventHandler::setEventState(State state)
+{
+  myState = state;
+  switch(myState)
+  {
+    case S_EMULATE:
+      myOverlay = NULL;
+
+      // Controller types only make sense in Emulate mode
+      myController[0] = myOSystem->console().controller(Controller::Left).type();
+      myController[1] = myOSystem->console().controller(Controller::Right).type();
+      break;
+
+    case S_MENU:
+      myOverlay = &myOSystem->menu();
+      break;
+
+    case S_CMDMENU:
+      myOverlay = &myOSystem->commandMenu();
+      break;
+
+    case S_LAUNCHER:
+      myOverlay = &myOSystem->launcher();
+      break;
+
+#ifdef DEVELOPER_SUPPORT
+    case S_DEBUGGER:
+      myOverlay = &myOSystem->debugger();
+      break;
+#endif
+
+    default:
+      myOverlay = NULL;
+      break;
+  }
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void EventHandler::saveProperties()
+{
+  myOSystem->console().saveProperties(myOSystem->userProperties(), true);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1705,20 +1843,20 @@ void EventHandler::setSDLMappings()
   ourSDLMapping[ SDLK_PAUSE ]        = "PAUSE";
   ourSDLMapping[ SDLK_ESCAPE ]       = "ESCAPE";
   ourSDLMapping[ SDLK_SPACE ]        = "SPACE";
-  ourSDLMapping[ SDLK_EXCLAIM ]      = "EXCLAIM";
-  ourSDLMapping[ SDLK_QUOTEDBL ]     = "QUOTEDBL";
-  ourSDLMapping[ SDLK_HASH ]         = "HASH";
-  ourSDLMapping[ SDLK_DOLLAR ]       = "DOLLAR";
-  ourSDLMapping[ SDLK_AMPERSAND ]    = "AMPERSAND";
-  ourSDLMapping[ SDLK_QUOTE ]        = "QUOTE";
-  ourSDLMapping[ SDLK_LEFTPAREN ]    = "LEFTPAREN";
-  ourSDLMapping[ SDLK_RIGHTPAREN ]   = "RIGHTPAREN";
-  ourSDLMapping[ SDLK_ASTERISK ]     = "ASTERISK";
-  ourSDLMapping[ SDLK_PLUS ]         = "PLUS";
+  ourSDLMapping[ SDLK_EXCLAIM ]      = "!";
+  ourSDLMapping[ SDLK_QUOTEDBL ]     = "\"";
+  ourSDLMapping[ SDLK_HASH ]         = "#";
+  ourSDLMapping[ SDLK_DOLLAR ]       = "$";
+  ourSDLMapping[ SDLK_AMPERSAND ]    = "&";
+  ourSDLMapping[ SDLK_QUOTE ]        = "\'";
+  ourSDLMapping[ SDLK_LEFTPAREN ]    = "(";
+  ourSDLMapping[ SDLK_RIGHTPAREN ]   = ")";
+  ourSDLMapping[ SDLK_ASTERISK ]     = "*";
+  ourSDLMapping[ SDLK_PLUS ]         = "+";
   ourSDLMapping[ SDLK_COMMA ]        = "COMMA";
-  ourSDLMapping[ SDLK_MINUS ]        = "MINUS";
-  ourSDLMapping[ SDLK_PERIOD ]       = "PERIOD";
-  ourSDLMapping[ SDLK_SLASH ]        = "SLASH";
+  ourSDLMapping[ SDLK_MINUS ]        = "-";
+  ourSDLMapping[ SDLK_PERIOD ]       = ".";
+  ourSDLMapping[ SDLK_SLASH ]        = "/";
   ourSDLMapping[ SDLK_0 ]            = "0";
   ourSDLMapping[ SDLK_1 ]            = "1";
   ourSDLMapping[ SDLK_2 ]            = "2";
@@ -1729,19 +1867,19 @@ void EventHandler::setSDLMappings()
   ourSDLMapping[ SDLK_7 ]            = "7";
   ourSDLMapping[ SDLK_8 ]            = "8";
   ourSDLMapping[ SDLK_9 ]            = "9";
-  ourSDLMapping[ SDLK_COLON ]        = "COLON";
-  ourSDLMapping[ SDLK_SEMICOLON ]    = "SEMICOLON";
-  ourSDLMapping[ SDLK_LESS ]         = "LESS";
-  ourSDLMapping[ SDLK_EQUALS ]       = "EQUALS";
-  ourSDLMapping[ SDLK_GREATER ]      = "GREATER";
-  ourSDLMapping[ SDLK_QUESTION ]     = "QUESTION";
-  ourSDLMapping[ SDLK_AT ]           = "AT";
-  ourSDLMapping[ SDLK_LEFTBRACKET ]  = "LEFTBRACKET";
-  ourSDLMapping[ SDLK_BACKSLASH ]    = "BACKSLASH";
-  ourSDLMapping[ SDLK_RIGHTBRACKET ] = "RIGHTBRACKET";
-  ourSDLMapping[ SDLK_CARET ]        = "CARET";
-  ourSDLMapping[ SDLK_UNDERSCORE ]   = "UNDERSCORE";
-  ourSDLMapping[ SDLK_BACKQUOTE ]    = "BACKQUOTE";
+  ourSDLMapping[ SDLK_COLON ]        = ":";
+  ourSDLMapping[ SDLK_SEMICOLON ]    = ";";
+  ourSDLMapping[ SDLK_LESS ]         = "<";
+  ourSDLMapping[ SDLK_EQUALS ]       = "=";
+  ourSDLMapping[ SDLK_GREATER ]      = ">";
+  ourSDLMapping[ SDLK_QUESTION ]     = "?";
+  ourSDLMapping[ SDLK_AT ]           = "@";
+  ourSDLMapping[ SDLK_LEFTBRACKET ]  = "[";
+  ourSDLMapping[ SDLK_BACKSLASH ]    = "\\";
+  ourSDLMapping[ SDLK_RIGHTBRACKET ] = "]";
+  ourSDLMapping[ SDLK_CARET ]        = "^";
+  ourSDLMapping[ SDLK_UNDERSCORE ]   = "_";
+  ourSDLMapping[ SDLK_BACKQUOTE ]    = "`";
   ourSDLMapping[ SDLK_a ]            = "A";
   ourSDLMapping[ SDLK_b ]            = "B";
   ourSDLMapping[ SDLK_c ]            = "C";
@@ -1875,22 +2013,22 @@ void EventHandler::setSDLMappings()
   ourSDLMapping[ SDLK_KP7 ]          = "KP7";
   ourSDLMapping[ SDLK_KP8 ]          = "KP8";
   ourSDLMapping[ SDLK_KP9 ]          = "KP9";
-  ourSDLMapping[ SDLK_KP_PERIOD ]    = "KP_PERIOD";
-  ourSDLMapping[ SDLK_KP_DIVIDE ]    = "KP_DIVIDE";
-  ourSDLMapping[ SDLK_KP_MULTIPLY ]  = "KP_MULTIPLY";
-  ourSDLMapping[ SDLK_KP_MINUS ]     = "KP_MINUS";
-  ourSDLMapping[ SDLK_KP_PLUS ]      = "KP_PLUS";
-  ourSDLMapping[ SDLK_KP_ENTER ]     = "KP_ENTER";
-  ourSDLMapping[ SDLK_KP_EQUALS ]    = "KP_EQUALS";
+  ourSDLMapping[ SDLK_KP_PERIOD ]    = "KP .";
+  ourSDLMapping[ SDLK_KP_DIVIDE ]    = "KP /";
+  ourSDLMapping[ SDLK_KP_MULTIPLY ]  = "KP *";
+  ourSDLMapping[ SDLK_KP_MINUS ]     = "KP -";
+  ourSDLMapping[ SDLK_KP_PLUS ]      = "KP +";
+  ourSDLMapping[ SDLK_KP_ENTER ]     = "KP ENTER";
+  ourSDLMapping[ SDLK_KP_EQUALS ]    = "KP =";
   ourSDLMapping[ SDLK_UP ]           = "UP";
   ourSDLMapping[ SDLK_DOWN ]         = "DOWN";
   ourSDLMapping[ SDLK_RIGHT ]        = "RIGHT";
   ourSDLMapping[ SDLK_LEFT ]         = "LEFT";
-  ourSDLMapping[ SDLK_INSERT ]       = "INSERT";
+  ourSDLMapping[ SDLK_INSERT ]       = "INS";
   ourSDLMapping[ SDLK_HOME ]         = "HOME";
   ourSDLMapping[ SDLK_END ]          = "END";
-  ourSDLMapping[ SDLK_PAGEUP ]       = "PAGEUP";
-  ourSDLMapping[ SDLK_PAGEDOWN ]     = "PAGEDOWN";
+  ourSDLMapping[ SDLK_PAGEUP ]       = "PGUP";
+  ourSDLMapping[ SDLK_PAGEDOWN ]     = "PGDN";
   ourSDLMapping[ SDLK_F1 ]           = "F1";
   ourSDLMapping[ SDLK_F2 ]           = "F2";
   ourSDLMapping[ SDLK_F3 ]           = "F3";
@@ -1932,7 +2070,9 @@ void EventHandler::setSDLMappings()
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-ActionList EventHandler::ourActionList[62] = {
+// FIXME - this must be handled better in the future ///
+#ifndef _WIN32_WCE
+ActionList EventHandler::ourActionList[kActionListSize] = {
   { Event::ConsoleSelect,               "Select",                          "" },
   { Event::ConsoleReset,                "Reset",                           "" },
   { Event::ConsoleColor,                "Color TV",                        "" },
@@ -1946,6 +2086,9 @@ ActionList EventHandler::ourActionList[62] = {
   { Event::LoadState,                   "Load State",                      "" },
   { Event::TakeSnapshot,                "Snapshot",                        "" },
   { Event::Pause,                       "Pause",                           "" },
+  { Event::Fry,                         "Fry cartridge",                   "" },
+  { Event::VolumeDecrease,              "Decrease volume",                 "" },
+  { Event::VolumeIncrease,              "Increase volume",                 "" },
   { Event::MenuMode,                    "Toggle options menu mode",        "" },
   { Event::CmdMenuMode,                 "Toggle command menu mode",        "" },
   { Event::DebuggerMode,                "Toggle debugger mode",            "" },
@@ -1964,6 +2107,26 @@ ActionList EventHandler::ourActionList[62] = {
   { Event::JoystickOneRight,            "P2 Joystick Right",               "" },
   { Event::JoystickOneFire,             "P2 Joystick Fire",                "" },
 
+  { Event::PaddleZeroAnalog,            "Paddle 1 Analog",                 "" },
+  { Event::PaddleZeroDecrease,          "Paddle 1 Decrease",               "" },
+  { Event::PaddleZeroIncrease,          "Paddle 1 Increase",               "" },
+  { Event::PaddleZeroFire,              "Paddle 1 Fire",                   "" },
+
+  { Event::PaddleOneAnalog,             "Paddle 2 Analog",                 "" },
+  { Event::PaddleOneDecrease,           "Paddle 2 Decrease",               "" },
+  { Event::PaddleOneIncrease,           "Paddle 2 Increase",               "" },
+  { Event::PaddleOneFire,               "Paddle 2 Fire",                   "" },
+
+  { Event::PaddleTwoAnalog,             "Paddle 3 Analog",                 "" },
+  { Event::PaddleTwoDecrease,           "Paddle 3 Decrease",               "" },
+  { Event::PaddleTwoIncrease,           "Paddle 3 Increase",               "" },
+  { Event::PaddleTwoFire,               "Paddle 3 Fire",                   "" },
+
+  { Event::PaddleThreeAnalog,           "Paddle 4 Analog",                 "" },
+  { Event::PaddleThreeDecrease,         "Paddle 4 Decrease",               "" },
+  { Event::PaddleThreeIncrease,         "Paddle 4 Increase",               "" },
+  { Event::PaddleThreeFire,             "Paddle 4 Fire",                   "" },
+
   { Event::BoosterGripZeroTrigger,      "P1 Booster-Grip Trigger",         "" },
   { Event::BoosterGripZeroBooster,      "P1 Booster-Grip Booster",         "" },
 
@@ -1978,32 +2141,35 @@ ActionList EventHandler::ourActionList[62] = {
   { Event::DrivingOneClockwise,         "P2 Driving Controller Right",     "" },
   { Event::DrivingOneFire,              "P2 Driving Controller Fire",      "" },
 
-  { Event::KeyboardZero1,               "P1 GamePad 1",                    "" },
-  { Event::KeyboardZero2,               "P1 GamePad 2",                    "" },
-  { Event::KeyboardZero3,               "P1 GamePad 3",                    "" },
-  { Event::KeyboardZero4,               "P1 GamePad 4",                    "" },
-  { Event::KeyboardZero5,               "P1 GamePad 5",                    "" },
-  { Event::KeyboardZero6,               "P1 GamePad 6",                    "" },
-  { Event::KeyboardZero7,               "P1 GamePad 7",                    "" },
-  { Event::KeyboardZero8,               "P1 GamePad 8",                    "" },
-  { Event::KeyboardZero9,               "P1 GamePad 9",                    "" },
-  { Event::KeyboardZeroStar,            "P1 GamePad *",                    "" },
-  { Event::KeyboardZero0,               "P1 GamePad 0",                    "" },
-  { Event::KeyboardZeroPound,           "P1 GamePad #",                    "" },
+  { Event::KeyboardZero1,               "P1 KeyPad 1",                     "" },
+  { Event::KeyboardZero2,               "P1 KeyPad 2",                     "" },
+  { Event::KeyboardZero3,               "P1 KeyPad 3",                     "" },
+  { Event::KeyboardZero4,               "P1 KeyPad 4",                     "" },
+  { Event::KeyboardZero5,               "P1 KeyPad 5",                     "" },
+  { Event::KeyboardZero6,               "P1 KeyPad 6",                     "" },
+  { Event::KeyboardZero7,               "P1 KeyPad 7",                     "" },
+  { Event::KeyboardZero8,               "P1 KeyPad 8",                     "" },
+  { Event::KeyboardZero9,               "P1 KeyPad 9",                     "" },
+  { Event::KeyboardZeroStar,            "P1 KeyPad *",                     "" },
+  { Event::KeyboardZero0,               "P1 KeyPad 0",                     "" },
+  { Event::KeyboardZeroPound,           "P1 KeyPad #",                     "" },
 
-  { Event::KeyboardOne1,                "P2 GamePad 1",                    "" },
-  { Event::KeyboardOne2,                "P2 GamePad 2",                    "" },
-  { Event::KeyboardOne3,                "P2 GamePad 3",                    "" },
-  { Event::KeyboardOne4,                "P2 GamePad 4",                    "" },
-  { Event::KeyboardOne5,                "P2 GamePad 5",                    "" },
-  { Event::KeyboardOne6,                "P2 GamePad 6",                    "" },
-  { Event::KeyboardOne7,                "P2 GamePad 7",                    "" },
-  { Event::KeyboardOne8,                "P2 GamePad 8",                    "" },
-  { Event::KeyboardOne9,                "P2 GamePad 9",                    "" },
-  { Event::KeyboardOneStar,             "P2 GamePad *",                    "" },
-  { Event::KeyboardOne0,                "P2 GamePad 0",                    "" },
-  { Event::KeyboardOnePound,            "P2 GamePad #",                    "" }
+  { Event::KeyboardOne1,                "P2 KeyPad 1",                     "" },
+  { Event::KeyboardOne2,                "P2 KeyPad 2",                     "" },
+  { Event::KeyboardOne3,                "P2 KeyPad 3",                     "" },
+  { Event::KeyboardOne4,                "P2 KeyPad 4",                     "" },
+  { Event::KeyboardOne5,                "P2 KeyPad 5",                     "" },
+  { Event::KeyboardOne6,                "P2 KeyPad 6",                     "" },
+  { Event::KeyboardOne7,                "P2 KeyPad 7",                     "" },
+  { Event::KeyboardOne8,                "P2 KeyPad 8",                     "" },
+  { Event::KeyboardOne9,                "P2 KeyPad 9",                     "" },
+  { Event::KeyboardOneStar,             "P2 KeyPad *",                     "" },
+  { Event::KeyboardOne0,                "P2 KeyPad 0",                     "" },
+  { Event::KeyboardOnePound,            "P2 KeyPad #",                     "" }
 };
+#else
+ActionList EventHandler::ourActionList[kActionListSize];
+#endif
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 const Event::Type EventHandler::Paddle_Resistance[4] = {
@@ -2020,9 +2186,17 @@ const Event::Type EventHandler::Paddle_Button[4] = {
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 const Event::Type EventHandler::SA_Axis[2][2][3] = {
   { {Event::JoystickZeroLeft, Event::JoystickZeroRight, Event::PaddleZeroResistance},
-    {Event::JoystickZeroUp,   Event::JoystickZeroDown,  Event::PaddleOneResistance }  },
+    {Event::JoystickZeroUp,   Event::JoystickZeroDown,  Event::PaddleOneResistance}   },
   { {Event::JoystickOneLeft,  Event::JoystickOneRight,  Event::PaddleTwoResistance},
     {Event::JoystickOneUp,    Event::JoystickOneDown,   Event::PaddleThreeResistance} }
+};
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+const Event::Type EventHandler::SA_Button[2][2][3] = {
+  { {Event::JoystickZeroFire, Event::PaddleZeroFire,  Event::DrivingZeroFire },
+    {Event::NoType,           Event::PaddleOneFire,   Event::NoType}            },
+  { {Event::JoystickOneFire,  Event::PaddleTwoFire,   Event::DrivingOneFire },
+    {Event::NoType,           Event::PaddleThreeFire, Event::NoType}            }
 };
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

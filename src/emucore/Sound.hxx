@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Sound.hxx,v 1.19 2005/06/16 00:55:58 stephena Exp $
+// $Id: Sound.hxx,v 1.21 2005/09/10 16:19:20 bwmott Exp $
 //============================================================================
 
 #ifndef SOUND_HXX
@@ -30,7 +30,7 @@ class Deserializer;
   It has no functionality whatsoever.
 
   @author Stephen Anthony
-  @version $Id: Sound.hxx,v 1.19 2005/06/16 00:55:58 stephena Exp $
+  @version $Id: Sound.hxx,v 1.21 2005/09/10 16:19:20 bwmott Exp $
 */
 class Sound
 {
@@ -63,6 +63,13 @@ class Sound
     virtual void adjustCycleCounter(Int32 amount) = 0;
 
     /**
+      Sets the number of channels (mono or stereo sound).
+
+      @param channels The number of channels
+    */
+    virtual void setChannels(uInt32 channels) = 0;
+
+    /**
       Sets the display framerate.  Sound generation for NTSC and PAL games
       depends on the framerate, so we need to set it here.
 
@@ -73,10 +80,14 @@ class Sound
     /**
       Initializes the sound device.  This must be called before any
       calls are made to derived methods.
-
-      @param forcerestart  Do a soft or hard reset of the sound subsystem
     */
-    virtual void initialize(bool forcerestart = false) = 0;
+    virtual void initialize() = 0;
+
+    /**
+      Should be called to close the sound device.  Once called the sound
+      device can be started again using the initialize method.
+    */
+    virtual void close() = 0;
 
     /**
       Return true iff the sound device was successfully initialized.

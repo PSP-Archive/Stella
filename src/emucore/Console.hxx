@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Console.hxx,v 1.38 2005/08/24 22:54:30 stephena Exp $
+// $Id: Console.hxx,v 1.41 2005/12/23 20:48:50 stephena Exp $
 //============================================================================
 
 #ifndef CONSOLE_HXX
@@ -37,7 +37,7 @@ class System;
   This class represents the entire game console.
 
   @author  Bradford W. Mott
-  @version $Id: Console.hxx,v 1.38 2005/08/24 22:54:30 stephena Exp $
+  @version $Id: Console.hxx,v 1.41 2005/12/23 20:48:50 stephena Exp $
 */
 class Console
 {
@@ -48,9 +48,11 @@ class Console
 
       @param image       The ROM image of the game to emulate
       @param size        The size of the ROM image  
+      @param md5         The md5 of the ROM image
       @param osystem     The OSystem object to use
     */
-    Console(const uInt8* image, uInt32 size, OSystem* osystem);
+    Console(const uInt8* image, uInt32 size, const string& md5,
+            OSystem* osystem);
 
     /**
       Create a new console object by copying another one
@@ -117,6 +119,11 @@ class Console
     */
     M6532& riot() const { return *myRiot; }
 
+    /**
+      Determine whether the console was successfully created
+    */
+    bool isInitialized() { return myIsInitializedFlag; }
+
   public:
     /**
       Overloaded assignment operator
@@ -166,6 +173,13 @@ class Console
       Sets the palette to that specified in the mediasource
     */
     void setPalette();
+
+    /**
+      Sets the number of sound channels
+
+      @param channels  Number of channels (indicates stereo or mono)
+    */
+    void setChannels(int channels);
 
     /**
       "Fry" the Atari (mangle memory/TIA contents)
@@ -248,6 +262,10 @@ class Console
     // Pointer to the 6532 (aka RIOT) (the debugger needs it)
     // A RIOT of my own! (...with apologies to The Clash...)
     M6532 *myRiot;
+
+    // Indicates whether the console was correctly initialized
+    // We don't really care why it wasn't initialized ...
+    bool myIsInitializedFlag;
 };
 
 #endif

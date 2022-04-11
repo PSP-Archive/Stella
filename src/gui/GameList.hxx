@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: GameList.hxx,v 1.5 2005/06/16 00:55:59 stephena Exp $
+// $Id: GameList.hxx,v 1.7 2005/12/09 01:16:13 stephena Exp $
 //
 //   Based on code from KStella - Stella frontend
 //   Copyright (C) 2003-2005 Stephen Anthony
@@ -37,8 +37,7 @@ class GameList
       string _note;
     };
 
-    typedef GUI::Array<Entry> EntryList;
-
+    typedef Common::Array<Entry> EntryList;
     EntryList myArray;
 
   public:

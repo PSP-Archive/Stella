@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: DebuggerDialog.cxx,v 1.3 2005/08/31 22:34:43 stephena Exp $
+// $Id: DebuggerDialog.cxx,v 1.10 2005/12/20 19:05:15 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
@@ -25,14 +25,17 @@
 #include "TiaInfoWidget.hxx"
 #include "TiaOutputWidget.hxx"
 #include "TiaZoomWidget.hxx"
+#include "AudioWidget.hxx"
 #include "PromptWidget.hxx"
 #include "CpuWidget.hxx"
 #include "RamWidget.hxx"
 #include "RomWidget.hxx"
 #include "TiaWidget.hxx"
 #include "DataGridOpsWidget.hxx"
+#include "EditTextWidget.hxx"
 #include "Rect.hxx"
 #include "Debugger.hxx"
+#include "DebuggerParser.hxx"
 
 #include "DebuggerDialog.hxx"
 
@@ -74,6 +77,8 @@ void DebuggerDialog::loadConfig()
   myCpu->loadConfig();
   myRam->loadConfig();
   myRom->loadConfig();
+
+  myMessageBox->setEditString("");
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -82,14 +87,21 @@ void DebuggerDialog::handleKeyDown(int ascii, int keycode, int modifiers)
   // Doing this means we disallow 'Alt xxx' events to any widget in the tabset
   if(instance()->eventHandler().kbdAlt(modifiers))
   {
-    if(ascii == 's')
-      doStep();
-    else if(ascii == 't')
-      doTrace();
-    else if(ascii == 'f')
-      doAdvance();
-    else if(ascii == 'l')
-      doScanlineAdvance();
+    switch(ascii)
+    {
+      case 's':
+        doStep();
+        break;
+      case 't':
+        doTrace();
+        break;
+      case 'f':
+        doAdvance();
+        break;
+      case 'l':
+        doScanlineAdvance();
+        break;
+    }
   }
   else
     Dialog::handleKeyDown(ascii, keycode, modifiers);
@@ -163,6 +175,12 @@ void DebuggerDialog::addTabArea()
   myTab->setParentWidget(tabID, tia);
   addToFocusList(tia->getFocusList(), tabID);
 
+  // The Audio tab
+  tabID = myTab->addTab("Audio");
+  AudioWidget* aud = new AudioWidget(myTab, 2, 2, widWidth, widHeight);
+  myTab->setParentWidget(tabID, aud);
+  addToFocusList(aud->getFocusList(), tabID);
+
   // The input/output tab (part of RIOT)
 //  tabID = myTab->addTab("I/O");
 
@@ -172,15 +190,23 @@ void DebuggerDialog::addTabArea()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void DebuggerDialog::addStatusArea()
 {
+  const GUI::Font& font = instance()->consoleFont();
   GUI::Rect r = instance()->debugger().getStatusBounds();
   int xpos, ypos;
 
   xpos = r.left;  ypos = r.top;
-  myTiaInfo = new TiaInfoWidget(this, xpos, ypos);
+  myTiaInfo = new TiaInfoWidget(this, xpos+20, ypos);
 
   ypos += myTiaInfo->getHeight() + 10;
-  myTiaZoom = new TiaZoomWidget(this, xpos, ypos);
+  myTiaZoom = new TiaZoomWidget(this, xpos+10, ypos);
   addToFocusList(myTiaZoom->getFocusList());
+
+  xpos += 10;  ypos += myTiaZoom->getHeight() + 20;
+  myMessageBox = new EditTextWidget(this, xpos, ypos, myTiaZoom->getWidth(),
+                                    font.getLineHeight(), "");
+  myMessageBox->setFont(font);
+  myMessageBox->setEditable(false);
+  myMessageBox->setColor(kTextColorEm);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -212,7 +238,7 @@ void DebuggerDialog::addRomArea()
   buttonY += 22;
   addButton(buttonX, buttonY, "Exit", kDDExitCmd, 0);
 
-  xpos = r.left + 10;  ypos += myRam->getHeight() + 15;
+  xpos = r.left + 10;  ypos += myRam->getHeight() + 5;
   myRom = new RomWidget(this, instance()->consoleFont(), xpos, ypos);
   addToFocusList(myRom->getFocusList());
 
@@ -225,25 +251,25 @@ void DebuggerDialog::addRomArea()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void DebuggerDialog::doStep()
 {
-  instance()->debugger().step();
+  instance()->debugger().parser()->run("step");
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void DebuggerDialog::doTrace()
 {
-  instance()->debugger().trace();
+  instance()->debugger().parser()->run("trace");
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void DebuggerDialog::doAdvance()
 {
-  instance()->debugger().nextFrame(1);
+  instance()->debugger().parser()->run("frame #1");
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void DebuggerDialog::doScanlineAdvance()
 {
-  instance()->debugger().nextScanline(1);
+  instance()->debugger().parser()->run("scanline #1");
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

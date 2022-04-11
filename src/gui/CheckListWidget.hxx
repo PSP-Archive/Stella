@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: CheckListWidget.hxx,v 1.6 2005/08/26 16:44:17 stephena Exp $
+// $Id: CheckListWidget.hxx,v 1.8 2005/12/09 01:16:13 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
@@ -36,7 +36,7 @@ enum CheckStyle {
   kSolidFill
 };
 
-typedef GUI::Array<CheckboxWidget*> CheckboxArray;
+typedef Common::Array<CheckboxWidget*> CheckboxArray;
 
 
 /** CheckListWidget */
@@ -52,6 +52,7 @@ class CheckListWidget : public ListWidget
     void setLine(int line, const string& str, const bool& state);
 
     bool getState(int line);
+    bool getSelectedState() { return getState(_selectedItem); }
 
     void handleCommand(CommandSender* sender, int cmd, int data, int id);
 

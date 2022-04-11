@@ -13,11 +13,12 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Cart.cxx,v 1.15 2005/07/30 16:25:48 urchlay Exp $
+// $Id: Cart.cxx,v 1.18 2005/12/23 20:48:50 stephena Exp $
 //============================================================================
 
 #include <assert.h>
-#include <string.h>
+
+#include "bspf.hxx"
 #include "Cart.hxx"
 #include "Cart2K.hxx"
 #include "Cart3E.hxx"
@@ -49,13 +50,11 @@ Cartridge* Cartridge::create(const uInt8* image, uInt32 size,
   Cartridge* cartridge = 0;
 
   // Get the type of the cartridge we're creating
-  string type = properties.get("Cartridge.Type");
+  string type = properties.get("Cartridge.Type", true);
 
   // See if we should try to auto-detect the cartridge type
-  if(type == "Auto-detect")
-  {
+  if(type == "AUTO-DETECT")
     type = autodetectType(image, size);
-  }
 
   // We should know the cart's type by now so let's create it
   if(type == "2K")
@@ -99,10 +98,7 @@ Cartridge* Cartridge::create(const uInt8* image, uInt32 size,
   else if(type == "UA")
     cartridge = new CartridgeUA(image);
   else
-  {
-    // TODO: At some point this should be handled in a better way...
-    assert(false);
-  }
+    cerr << "ERROR: Invalid cartridge type " << type << " ..." << endl;
 
   return cartridge;
 }
@@ -110,6 +106,7 @@ Cartridge* Cartridge::create(const uInt8* image, uInt32 size,
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Cartridge::Cartridge()
 {
+  unlockBank();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

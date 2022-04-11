@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Keyboard.hxx,v 1.2 2005/06/16 01:11:27 stephena Exp $
+// $Id: Keyboard.hxx,v 1.4 2005/11/12 22:59:20 stephena Exp $
 //============================================================================
 
 #ifndef KEYBOARD_HXX
@@ -26,7 +26,7 @@
   The standard Atari 2600 keyboard controller
 
   @author  Bradford W. Mott
-  @version $Id: Keyboard.hxx,v 1.2 2005/06/16 01:11:27 stephena Exp $
+  @version $Id: Keyboard.hxx,v 1.4 2005/11/12 22:59:20 stephena Exp $
 */
 class Keyboard : public Controller
 {
@@ -76,5 +76,5 @@ class Keyboard : public Controller
     // State of the output pins
     uInt8 myPinState;
 };
-#endif
 
+#endif

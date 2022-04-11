@@ -1,8 +1,8 @@
 //============================================================================
 //
-//   SSSS    tt          lll  lll       
-//  SS  SS   tt           ll   ll        
-//  SS     tttttt  eeee   ll   ll   aaaa 
+//   SSSS    tt          lll  lll
+//  SS  SS   tt           ll   ll
+//  SS     tttttt  eeee   ll   ll   aaaa
 //   SSSS    tt   ee  ee  ll   ll      aa
 //      SS   tt   eeeeee  ll   ll   aaaaa  --  "An Atari 2600 VCS Emulator"
 //  SS  SS   tt   ee      ll   ll  aa  aa
@@ -13,31 +13,25 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: OSystem.cxx,v 1.35 2005/08/30 01:10:54 stephena Exp $
+// $Id: OSystem.cxx,v 1.52 2006/01/05 18:53:23 stephena Exp $
 //============================================================================
 
 #include <cassert>
 #include <sstream>
 #include <fstream>
 
-#include "unzip.h"
-
-#include "FrameBuffer.hxx"
-#include "FrameBufferSoft.hxx"
-#ifdef DISPLAY_OPENGL
-  #include "FrameBufferGL.hxx"
-#endif
-
-#include "Sound.hxx"
-#include "SoundNull.hxx"
-#ifdef SOUND_SUPPORT
-  #include "SoundSDL.hxx"
-#endif
+#include "MediaFactory.hxx"
 
 #ifdef DEVELOPER_SUPPORT
   #include "Debugger.hxx"
 #endif
 
+#ifdef CHEATCODE_SUPPORT
+  #include "CheatManager.hxx"
+#endif
+
+#include "unzip.h"
+#include "MD5.hxx"
 #include "FSNode.hxx"
 #include "Settings.hxx"
 #include "PropsSet.hxx"
@@ -63,6 +57,7 @@ OSystem::OSystem()
     myCommandMenu(NULL),
     myLauncher(NULL),
     myDebugger(NULL),
+    myCheatManager(NULL),
     myRomFile(""),
     myFeatures(""),
     myFont(NULL),
@@ -75,6 +70,9 @@ OSystem::OSystem()
 #ifdef DEVELOPER_SUPPORT
   myDebugger = new Debugger(this);
 #endif
+#ifdef CHEATCODE_SUPPORT
+  myCheatManager = new CheatManager(this);
+#endif
 
   // Create fonts to draw text
   myFont        = new GUI::Font(GUI::stellaDesc);
@@ -84,7 +82,7 @@ OSystem::OSystem()
 #ifdef DISPLAY_OPENGL
   myFeatures += "OpenGL ";
 #endif
-#ifdef SOUND_SUPPORT 
+#ifdef SOUND_SUPPORT
   myFeatures += "Sound ";
 #endif
 #ifdef JOYSTICK_SUPPORT
@@ -94,24 +92,21 @@ OSystem::OSystem()
   myFeatures += "Snapshot ";
 #endif
 #ifdef DEVELOPER_SUPPORT
-  myFeatures += "Debugger";
+  myFeatures += "Debugger ";
+#endif
+#ifdef CHEATCODE_SUPPORT
+  myFeatures += "Cheats";
 #endif
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 OSystem::~OSystem()
 {
-  myDriverList.clear();
-
   delete myMenu;
   delete myCommandMenu;
   delete myLauncher;
   delete myFont;
   delete myConsoleFont;
-
-#ifdef DEVELOPER_SUPPORT
-  delete myDebugger;
-#endif
 
   // Remove any game console that is currently attached
   delete myConsole;
@@ -120,6 +115,16 @@ OSystem::~OSystem()
   // since it created them
   delete myFrameBuffer;
   delete mySound;
+
+  // These must be deleted after all the others
+  // This is a bit hacky, since it depends on ordering
+  // of d'tor calls
+#ifdef DEVELOPER_SUPPORT
+  delete myDebugger;
+#endif
+#ifdef CHEATCODE_SUPPORT
+  delete myCheatManager;
+#endif
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -139,18 +144,12 @@ void OSystem::setStateDir(const string& statedir)
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void OSystem::setPropertiesFiles(const string& userprops,
-                                 const string& systemprops)
+void OSystem::setPropertiesDir(const string& userpath,
+                               const string& systempath)
 {
   // Set up the input and output properties files
-  myPropertiesOutputFile = userprops;
-
-  if(FilesystemNode::fileExists(userprops))
-    myPropertiesInputFile = userprops;
-  else if(FilesystemNode::fileExists(systemprops))
-    myPropertiesInputFile = systemprops;
-  else
-    myPropertiesInputFile = "";
+  myUserPropertiesFile   = userpath + BSPF_PATH_SEPARATOR + "user.pro";
+  mySystemPropertiesFile = systempath + BSPF_PATH_SEPARATOR + "stella.pro";
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -169,40 +168,21 @@ void OSystem::setConfigFiles(const string& userconfig,
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void OSystem::setFramerate(uInt32 framerate)
+{
+  myDisplayFrameRate = framerate;
+  myTimePerFrame = (uInt32)(1000000.0 / (double)myDisplayFrameRate);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool OSystem::createFrameBuffer(bool showmessage)
 {
-/* FIXME - this will probably be discontinued for 2.0
-  // Set the SDL_VIDEODRIVER environment variable, if possible
-  string videodriver = mySettings->getString("video_driver");
-  if(videodriver != "")
-  {
-    string buf = "SDL_VIDEODRIVER=" + videodriver;
-    putenv((char*) buf.c_str());
-
-    if(mySettings->getBool("showinfo"))
-    {
-      buf = "Video driver: " + videodriver;
-      cout << buf << endl << endl;
-    }
-  }
-*/
   // Delete the old framebuffer
   delete myFrameBuffer;  myFrameBuffer = NULL;
 
   // And recreate a new one
   string video = mySettings->getString("video");
-
-  if(video == "soft")
-    myFrameBuffer = new FrameBufferSoft(this);
-  else if(video == "hard")
-    myFrameBuffer = new FrameBufferSoft(this, true);
-#ifdef DISPLAY_OPENGL
-  else if(video == "gl")
-    myFrameBuffer = new FrameBufferGL(this);
-#endif
-  else   // a driver that doesn't exist was requested, so use software mode
-    myFrameBuffer = new FrameBufferSoft(this);
-
+  myFrameBuffer = MediaFactory::createVideo(video, this);
   if(!myFrameBuffer)
     return false;
 
@@ -216,9 +196,7 @@ bool OSystem::createFrameBuffer(bool showmessage)
       if(showmessage)
       {
         if(video == "soft")
-          myFrameBuffer->showMessage("Software mode (S)");
-        else if(video == "hard")
-          myFrameBuffer->showMessage("Software mode (H)");
+          myFrameBuffer->showMessage("Software mode");
       #ifdef DISPLAY_OPENGL
         else if(video == "gl")
           myFrameBuffer->showMessage("OpenGL mode");
@@ -251,8 +229,6 @@ void OSystem::toggleFrameBuffer()
   // First figure out which mode to switch to
   string video = mySettings->getString("video");
   if(video == "soft")
-    video = "hard";
-  else if(video == "hard")
     video = "gl";
   else if(video == "gl")
     video = "soft";
@@ -271,11 +247,9 @@ void OSystem::createSound()
   delete mySound;  mySound = NULL;
 
   // And recreate a new sound device
-#ifdef SOUND_SUPPORT
-  mySound = new SoundSDL(this);
-#else
+  mySound = MediaFactory::createAudio("", this);
+#ifndef SOUND_SUPPORT
   mySettings->setBool("sound", false);
-  mySound = new SoundNull(this);
 #endif
 
   // Re-initialize the sound object to current settings
@@ -314,27 +288,37 @@ bool OSystem::createConsole(const string& romfile)
   // Open the cartridge image and read it in
   uInt8* image;
   int size = -1;
-  if(openROM(myRomFile, &image, &size))
+  string md5;
+  if(openROM(myRomFile, md5, &image, &size))
   {
     delete myConsole;  myConsole = NULL;
 
     // Create an instance of the 2600 game console
     // The Console c'tor takes care of updating the eventhandler state
-    myConsole = new Console(image, size, this);
+    myConsole = new Console(image, size, md5, this);
+    if(myConsole->isInitialized())
+    {
+    #ifdef CHEATCODE_SUPPORT
+      myCheatManager->loadCheats(md5);
+    #endif
+      if(showmessage)
+        myFrameBuffer->showMessage("New console created");
+      if(mySettings->getBool("showinfo"))
+        cout << "Game console created: " << myRomFile << endl;
 
-    if(showmessage)
-      myFrameBuffer->showMessage("New console created");
-    if(mySettings->getBool("showinfo"))
-      cout << "Game console created: " << myRomFile << endl;
-
-    retval = true;
-    myEventHandler->reset(EventHandler::S_EMULATE);
-    myFrameBuffer->setCursorState();
+      myEventHandler->reset(EventHandler::S_EMULATE);
+      myFrameBuffer->setCursorState();
+      retval = true;
+    }
+    else
+    {
+      cerr << "ERROR: Couldn't create console for " << myRomFile << " ..." << endl;
+      retval = false;
+    }
   }
   else
   {
-    cerr << "ERROR: Couldn't open " << myRomFile << "..." << endl;
-//    myEventHandler->quit();
+    cerr << "ERROR: Couldn't open " << myRomFile << " ..." << endl;
     retval = false;
   }
 
@@ -348,6 +332,7 @@ bool OSystem::createConsole(const string& romfile)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void OSystem::createLauncher()
 {
+  mySound->close();
   setFramerate(60);
   myEventHandler->reset(EventHandler::S_LAUNCHER);
 
@@ -361,11 +346,10 @@ void OSystem::createLauncher()
   myEventHandler->refreshDisplay();
 
   myFrameBuffer->setCursorState();
-  mySound->mute(true);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-bool OSystem::openROM(const string& rom, uInt8** image, int* size)
+bool OSystem::openROM(const string& rom, string& md5, uInt8** image, int* size)
 {
   // Try to open the file as a zipped archive
   // If that fails, we assume it's just a normal data file
@@ -374,16 +358,38 @@ bool OSystem::openROM(const string& rom, uInt8** image, int* size)
   {
     if(unzGoToFirstFile(tz) == UNZ_OK)
     {
-      unz_file_info ufo; 
-      unzGetCurrentFileInfo(tz, &ufo, 0, 0, 0, 0, 0, 0);
+      unz_file_info ufo;
 
+      for(;;)  // Loop through all files for valid 2600 images
+      {
+        // Longer filenames might be possible, but I don't
+        // think people would name files that long in zip files...
+        char filename[1024];
+
+        unzGetCurrentFileInfo(tz, &ufo, filename, 1024, 0, 0, 0, 0);
+        filename[1023] = '\0';
+
+        if(strlen(filename) >= 4)
+        {
+          // Grab 3-character extension
+          char* ext = filename + strlen(filename) - 4;
+
+          if(!STR_CASE_CMP(ext, ".bin") || !STR_CASE_CMP(ext, ".a26"))
+            break;
+        }
+
+        // Scan the next file in the zip
+        if(unzGoToNextFile(tz) != UNZ_OK)
+          break;
+      }
+
+      // Now see if we got a valid image
       if(ufo.uncompressed_size <= 0)
       {
         unzClose(tz);
         return false;
       }
-
-      *size = ufo.uncompressed_size;
+      *size  = ufo.uncompressed_size;
       *image = new uInt8[*size];
 
       // We don't have to check for any return errors from these functions,
@@ -412,7 +418,67 @@ bool OSystem::openROM(const string& rom, uInt8** image, int* size)
     in.close();
   }
 
+  // If we get to this point, we know we have a valid file to open
+  // Now we make sure that the file has a valid properties entry
+  md5 = MD5(*image, *size);
+
+  // Some games may not have a name, since there may not
+  // be an entry in stella.pro.  In that case, we use the rom name
+  // and reinsert the properties object
+  Properties props;
+  myPropSet->getMD5(md5, props);
+
+  string name = props.get("Cartridge.Name");
+  if(name == "Untitled")
+  {
+    // Get the filename from the rom pathname
+    string::size_type pos = rom.find_last_of(BSPF_PATH_SEPARATOR);
+    if(pos+1 != string::npos)
+    {
+      name = rom.substr(pos+1);
+      props.set("Cartridge.MD5", md5);
+      props.set("Cartridge.Name", name);
+      myPropSet->insert(props);
+    }
+  }
+
   return true;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void OSystem::getJoyButtonDirections(int& up, int& down, int& left, int& right)
+{
+  up = down = left = right = -1;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void OSystem::setDefaultJoymap()
+{
+  // Left joystick (assume joystick zero, button zero)
+  myEventHandler->setDefaultJoyMapping(Event::JoystickZeroFire, 0, 0);
+
+  // Right joystick (assume joystick one, button zero)
+  myEventHandler->setDefaultJoyMapping(Event::JoystickOneFire, 1, 0);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void OSystem::setDefaultJoyAxisMap()
+{
+  // Left joystick left/right directions (assume joystick zero)
+  myEventHandler->setDefaultJoyAxisMapping(Event::JoystickZeroLeft, 0, 0, 0);
+  myEventHandler->setDefaultJoyAxisMapping(Event::JoystickZeroRight, 0, 0, 1);
+
+  // Left joystick up/down directions (assume joystick zero)
+  myEventHandler->setDefaultJoyAxisMapping(Event::JoystickZeroUp, 0, 1, 0);
+  myEventHandler->setDefaultJoyAxisMapping(Event::JoystickZeroDown, 0, 1, 1);
+
+  // Right joystick left/right directions (assume joystick one)
+  myEventHandler->setDefaultJoyAxisMapping(Event::JoystickOneLeft, 1, 0, 0);
+  myEventHandler->setDefaultJoyAxisMapping(Event::JoystickOneRight, 1, 0, 1);
+
+  // Right joystick left/right directions (assume joystick one)
+  myEventHandler->setDefaultJoyAxisMapping(Event::JoystickOneUp, 1, 1, 0);
+  myEventHandler->setDefaultJoyAxisMapping(Event::JoystickOneDown, 1, 1, 1);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: OSystem.hxx,v 1.28 2005/08/29 18:36:41 stephena Exp $
+// $Id: OSystem.hxx,v 1.33 2006/01/05 18:53:23 stephena Exp $
 //============================================================================
 
 #ifndef OSYSTEM_HXX
@@ -25,6 +25,7 @@ class Menu;
 class CommandMenu;
 class Launcher;
 class Debugger;
+class CheatManager;
 
 #include "EventHandler.hxx"
 #include "FrameBuffer.hxx"
@@ -43,7 +44,7 @@ class Debugger;
   other objects belong.
 
   @author  Stephen Anthony
-  @version $Id: OSystem.hxx,v 1.28 2005/08/29 18:36:41 stephena Exp $
+  @version $Id: OSystem.hxx,v 1.33 2006/01/05 18:53:23 stephena Exp $
 */
 class OSystem
 {
@@ -152,6 +153,15 @@ class OSystem
     Debugger& debugger(void) const { return *myDebugger; }
 #endif
 
+#ifdef CHEATCODE_SUPPORT
+    /**
+      Get the cheat manager of the system.
+
+      @return The cheatmanager object
+    */
+    CheatManager& cheat(void) const { return *myCheatManager; }
+#endif
+
     /**
       Get the font object of the system
 
@@ -172,9 +182,7 @@ class OSystem
 
       @param framerate  The video framerate to use
     */
-    void setFramerate(uInt32 framerate)
-         { myDisplayFrameRate = framerate;
-           myTimePerFrame = (uInt32)(1000000.0 / (double)myDisplayFrameRate); }
+    virtual void setFramerate(uInt32 framerate);
 
     /**
       Get the current framerate for the video system.
@@ -195,19 +203,19 @@ class OSystem
 
     /**
       This method should be called to get the filename of the
-      properties (stella.pro) file for the purpose of loading.
+      system-wide properties file (stella.pro).
 
       @return String representing the full path of the properties filename.
     */
-    const string& propertiesInputFilename() { return myPropertiesInputFile; }
+    const string& systemProperties() { return mySystemPropertiesFile; }
 
     /**
       This method should be called to get the filename of the
-      properties (stella.pro) file for the purpose of saving.
+      user-specific properties file (user.pro).
 
       @return String representing the full path of the properties filename.
     */
-    const string& propertiesOutputFilename() { return myPropertiesOutputFile; }
+    const string& userProperties() { return myUserPropertiesFile; }
 
     /**
       This method should be called to get the filename of the config file
@@ -273,24 +281,18 @@ class OSystem
     const string& features() { return myFeatures; }
 
     /**
-      The features which are conditionally compiled into Stella.
-
-      @return  The supported features
-    */
-    const StringList& driverList() { return myDriverList; }
-
-    /**
       Open the given ROM and return an array containing its contents.
 
       @param rom    The absolute pathname of the ROM file
+      @param md5    The md5 calculated from the ROM file
       @param image  A pointer to store the ROM data
                     Note, the calling method is responsible for deleting this
       @param size   The amount of data read into the image array
       @return  False on any errors, else true
     */
-    bool openROM(const string& rom, uInt8** image, int* size);
+    bool openROM(const string& rom, string& md5, uInt8** image, int* size);
 
-	 const string& romFile() { return myRomFile; }
+    const string& romFile() { return myRomFile; }
 
   public:
     //////////////////////////////////////////////////////////////////////
@@ -311,6 +313,34 @@ class OSystem
     */
     virtual uInt32 getTicks() = 0;
 
+    //////////////////////////////////////////////////////////////////////
+    // The following methods are system-specific and can be overrided in
+    // derived classes.  Otherwise, the base methods will be used.
+    //////////////////////////////////////////////////////////////////////
+    /**
+      This method gives joystick button numbers representing the 'up', 'down',
+      'left' and 'right' directions for use in the internal GUI.  A normal
+      joystick will use axes for this, but some hardware uses buttons instead.
+
+      @up     Button number to assign to the 'up' direction
+      @down   Button number to assign to the 'down' direction
+      @left   Button number to assign to the 'left' direction
+      @right  Button number to assign to the 'right' direction
+    */
+    virtual void getJoyButtonDirections(int& up, int& down, int& left, int& right);
+
+    /**
+      This method determines the default mapping of joystick buttons to
+      Stella events for a specific system/platform.
+    */
+    virtual void setDefaultJoymap();
+
+    /**
+      This method determines the default mapping of joystick axis to
+      Stella events for a specific system/platform.
+    */
+    virtual void setDefaultJoyAxisMap();
+
   protected:
     /**
       Set the base directory for all Stella files
@@ -325,7 +355,7 @@ class OSystem
     /**
       Set the locations of game properties files
     */
-    void setPropertiesFiles(const string& userprops, const string& systemprops);
+    void setPropertiesDir(const string& userpath, const string& systempath);
 
     /**
       Set the locations of config files
@@ -368,21 +398,21 @@ class OSystem
     // Pointer to the Debugger object
     Debugger* myDebugger;
 
+    // Pointer to the CheatManager object
+    CheatManager* myCheatManager;
+
     // Number of times per second to iterate through the main loop
     uInt32 myDisplayFrameRate;
 
     // Time per frame for a video update, based on the current framerate
     uInt32 myTimePerFrame;
 
-    // Holds the types of SDL video driver supported by this OSystem
-    StringList myDriverList;
-
   private:
     string myBaseDir;
     string myStateDir;
 
-    string myPropertiesInputFile;
-    string myPropertiesOutputFile;
+    string mySystemPropertiesFile;
+    string myUserPropertiesFile;
     string myConfigInputFile;
     string myConfigOutputFile;
 

@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: OSystemPSP.cxx,v 1.2 2005/08/30 01:10:54 stephena Exp $
+// $Id: OSystemPSP.cxx,v 1.4 2006/01/05 18:53:23 stephena Exp $
 //============================================================================
 
 #include <cstdlib>
@@ -66,7 +66,7 @@ OSystemPSP::OSystemPSP()
 
   string userPropertiesFile   = basedir + "/stella.pro";
   string systemPropertiesFile = "/etc/stella.pro";
-  setPropertiesFiles(userPropertiesFile, systemPropertiesFile);
+  setConfigFiles(userPropertiesFile, systemPropertiesFile);
 
   string userConfigFile   = basedir + "/stellarc";
   string systemConfigFile = "/etc/stellarc";
@@ -75,8 +75,6 @@ OSystemPSP::OSystemPSP()
   string cacheFile = basedir + "/stella.cache";
   setCacheFile(cacheFile);
 
-  // Overclock CPU to 333MHz
-  scePowerSetClockFrequency(333,333,166);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -97,6 +95,17 @@ void OSystemPSP::mainLoop()
   // Set the base for the timers
   virtualTime = getTicks();
   frameTime = 0;
+
+  // Overclock CPU to 333MHz
+  if (settings().getBool("pspoverclock"))
+  {
+    scePowerSetClockFrequency(333,333,166);
+    fprintf(stderr,"OSystemPSP::mainLoop overclock to 333\n");
+  }
+  else
+  {
+    fprintf(stderr,"OSystemPSP::mainLoop NOT overclock\n");
+  }
 
   // Main game loop
   for(;;)
@@ -131,3 +140,35 @@ uInt32 OSystemPSP::getTicks()
 #endif
 }
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void OSystemPSP::getJoyButtonDirections(int& up, int& down, int& left, int& right)
+{
+  up    = 8;
+  down  = 6;
+  left  = 7;
+  right = 9;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void OSystemPSP::setDefaultJoymap()
+{
+  myEventHandler->setDefaultJoyMapping(Event::TakeSnapshot, 0, 0);      // Triangle
+  myEventHandler->setDefaultJoyMapping(Event::LoadState, 0, 1);         // Circle
+  myEventHandler->setDefaultJoyMapping(Event::JoystickZeroFire, 0, 2);  // Cross
+  myEventHandler->setDefaultJoyMapping(Event::SaveState, 0, 3);         // Square
+  myEventHandler->setDefaultJoyMapping(Event::MenuMode, 0, 4);          // Left trigger
+  myEventHandler->setDefaultJoyMapping(Event::CmdMenuMode, 0, 5);       // Right trigger
+  myEventHandler->setDefaultJoyMapping(Event::JoystickZeroDown, 0, 6);  // Down
+  myEventHandler->setDefaultJoyMapping(Event::JoystickZeroLeft, 0, 7);  // Left
+  myEventHandler->setDefaultJoyMapping(Event::JoystickZeroUp, 0, 8);    // Up
+  myEventHandler->setDefaultJoyMapping(Event::JoystickZeroRight, 0, 9); // Right
+  myEventHandler->setDefaultJoyMapping(Event::ConsoleSelect, 0, 10);    // Select
+  myEventHandler->setDefaultJoyMapping(Event::ConsoleReset, 0, 11);     // Start
+  myEventHandler->setDefaultJoyMapping(Event::NoType, 0, 12);           // Home
+  myEventHandler->setDefaultJoyMapping(Event::NoType, 0, 13);           // Hold
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void OSystemPSP::setDefaultJoyAxisMap()
+{
+}

@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: CartCV.cxx,v 1.8 2005/07/30 16:58:22 urchlay Exp $
+// $Id: CartCV.cxx,v 1.10 2005/12/17 01:23:07 stephena Exp $
 //============================================================================
 
 #include <assert.h>
@@ -37,7 +37,7 @@ CartridgeCV::CartridgeCV(const uInt8* image, uInt32 size)
     }
 
     // Initialize RAM with random values
-    Random random;
+    class Random random;
     for(uInt32 i = 0; i < 1024; ++i)
     {
       myRAM[i] = random.next();
@@ -148,9 +148,9 @@ bool CartridgeCV::save(Serializer& out)
     out.putString(cart);
 
     // Output RAM
-    out.putLong(1024);
+    out.putInt(1024);
     for(uInt32 addr = 0; addr < 1024; ++addr)
-      out.putLong(myRAM[addr]);
+      out.putInt(myRAM[addr]);
   }
   catch(char *msg)
   {
@@ -177,9 +177,9 @@ bool CartridgeCV::load(Deserializer& in)
       return false;
 
     // Input RAM
-    uInt32 limit = (uInt32) in.getLong();
+    uInt32 limit = (uInt32) in.getInt();
     for(uInt32 addr = 0; addr < limit; ++addr)
-      myRAM[addr] = (uInt8) in.getLong();
+      myRAM[addr] = (uInt8) in.getInt();
   }
   catch(char *msg)
   {

@@ -13,11 +13,13 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: TiaOutputWidget.cxx,v 1.3 2005/09/01 16:49:52 stephena Exp $
+// $Id: TiaOutputWidget.cxx,v 1.7 2005/10/11 19:38:10 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
 //============================================================================
+
+#include <sstream>
 
 #include "OSystem.hxx"
 #include "FrameBuffer.hxx"
@@ -26,6 +28,7 @@
 #include "ContextMenu.hxx"
 #include "TiaZoomWidget.hxx"
 #include "Debugger.hxx"
+#include "DebuggerParser.hxx"
 #include "TIADebug.hxx"
 
 #include "TiaOutputWidget.hxx"
@@ -98,10 +101,6 @@ void TiaOutputWidget::handleMouseDown(int x, int y, int button, int clickCount)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void TiaOutputWidget::handleCommand(CommandSender* sender, int cmd, int data, int id)
 {
-  // FIXME - these coords aren't yet accurate, but that doesn't stop
-  //         us from implementing the functionality
-  //         Maybe they're accurate enough for our purposes??
-  int xstart = atoi(instance()->console().properties().get("Display.XStart").c_str());
   int ystart = atoi(instance()->console().properties().get("Display.YStart").c_str());
 
   switch(cmd)
@@ -111,15 +110,25 @@ void TiaOutputWidget::handleCommand(CommandSender* sender, int cmd, int data, in
       {
         case 0:
         {
-          int lines = myClickY + ystart - instance()->debugger().tiaDebug().scanlines();
+          ostringstream command;
+          int lines = myClickY + ystart -
+              instance()->debugger().tiaDebug().scanlines();
           if(lines > 0)
-            instance()->debugger().nextScanline(lines);
+          {
+            command << "scanline #" << lines;
+            instance()->debugger().parser()->run(command.str());
+          }
           break;
         }
 
         case 1:
-          cerr << "Set breakpoint\n";
+        {
+          ostringstream command;
+          int scanline = myClickY + ystart;
+          command << "breakif _scan==#" << scanline;
+          instance()->debugger().parser()->run(command.str());
           break;
+        }
 
         case 2:
           if(myZoom)
@@ -133,7 +142,7 @@ void TiaOutputWidget::handleCommand(CommandSender* sender, int cmd, int data, in
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void TiaOutputWidget::drawWidget(bool hilite)
 {
-//cerr << "TiaOutputWidget::drawWidget\n";
+  // FIXME - check if we're in 'greyed out mode' and act accordingly
   instance()->frameBuffer().refresh();
   instance()->frameBuffer().drawMediaSource();
 }

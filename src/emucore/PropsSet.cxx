@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: PropsSet.cxx,v 1.10 2005/06/16 01:11:28 stephena Exp $
+// $Id: PropsSet.cxx,v 1.14 2005/10/19 00:59:51 stephena Exp $
 //============================================================================
 
 #include <assert.h>
@@ -23,11 +23,8 @@
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 PropertiesSet::PropertiesSet()
-   : myRoot(0), 
-     mySize(0),
-     myUseMemList(true),
-     myPropertiesFilename(""),
-     mySaveOnExit(false)
+   : myRoot(NULL), 
+     mySize(0)
 {
   myDefaultProperties = &defaultProperties();
 }
@@ -35,102 +32,57 @@ PropertiesSet::PropertiesSet()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 PropertiesSet::~PropertiesSet()
 {
-  if(myPropertiesStream.is_open())
-    myPropertiesStream.close();
-
-  if(myUseMemList && mySaveOnExit && (myPropertiesFilename != ""))
-  {
-    ofstream out(myPropertiesFilename.c_str());
-    if(out.is_open())
-    {
-      save(out);
-      out.close();
-    }
-  }
-
   deleteNode(myRoot);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void PropertiesSet::getMD5(string md5, Properties &properties)
+void PropertiesSet::getMD5(const string& md5, Properties &properties)
 {
   bool found = false;
 
-  if(myUseMemList)
+  // Make sure tree isn't empty
+  if(myRoot == 0)
   {
-    // Make sure tree isn't empty
-    if(myRoot == 0)
-    {
-      properties = myDefaultProperties;
-      return;
-    }
-
-    // Else, do a BST search for the node with the given md5
-    TreeNode* current = myRoot;
-
-    while(current)
-    {
-      string currentMd5 = current->props->get("Cartridge.MD5");
-
-      if(currentMd5 == md5)
-      {
-        found = true;
-        break;
-      }
-      else
-      {
-        if(md5 < currentMd5)
-          current = current->left;
-        else 
-           current = current->right;
-      }
-    }
-
-    if(found)
-      properties = *(current->props);
-    else
-      properties = myDefaultProperties;
+	properties = myDefaultProperties;
+	return;
   }
+
+  // Else, do a BST search for the node with the given md5
+  TreeNode* current = myRoot;
+
+  while(current)
+  {
+	string currentMd5 = current->props->get("Cartridge.MD5");
+
+	if(currentMd5 == md5)
+	{
+	  found = true;
+	  break;
+	}
+	else
+	{
+	  if(md5 < currentMd5)
+		current = current->left;
+	  else 
+		 current = current->right;
+	}
+  }
+
+  if(found)
+	properties = *(current->props);
   else
-  {
-    // Loop reading properties until required properties found
-    for(;;)
-    {
-      // Make sure the stream is still good or we're done 
-      if(!myPropertiesStream)
-      {
-        break;
-      }
-
-      // Get the property list associated with this profile
-      Properties currentProperties(myDefaultProperties);
-      currentProperties.load(myPropertiesStream);
-
-      // If the stream is still good then insert the properties
-      if(myPropertiesStream)
-      {
-        string currentMd5 = currentProperties.get("Cartridge.MD5");
-
-        if(currentMd5 == md5)
-        {
-          properties = currentProperties;
-          return;
-        }
-      }
-    }
-
-    properties = myDefaultProperties;
-  }
+	properties = myDefaultProperties;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void PropertiesSet::insert(const Properties& properties)
+void PropertiesSet::insert(const Properties& properties, bool save)
 {
-	insertNode(myRoot, properties);
+  insertNode(myRoot, properties, save);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void PropertiesSet::insertNode(TreeNode* &t, const Properties& properties)
+void PropertiesSet::insertNode(TreeNode* &t, const Properties& properties,
+                               bool save)
 {
   if(t)
   {
@@ -138,13 +90,14 @@ void PropertiesSet::insertNode(TreeNode* &t, const Properties& properties)
     string currentMd5 = t->props->get("Cartridge.MD5");
 
     if(md5 < currentMd5)
-      insertNode(t->left, properties);
+      insertNode(t->left, properties, save);
     else if(md5 > currentMd5)
-      insertNode(t->right, properties);
+      insertNode(t->right, properties, save);
     else
     {
       delete t->props;
       t->props = new Properties(properties);
+      t->save = save;
     }
   }
   else
@@ -153,6 +106,7 @@ void PropertiesSet::insertNode(TreeNode* &t, const Properties& properties)
     t->props = new Properties(properties);
     t->left = 0;
     t->right = 0;
+    t->save = save;
 
     ++mySize;
   }
@@ -171,37 +125,27 @@ void PropertiesSet::deleteNode(TreeNode *node)
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void PropertiesSet::load(string filename, bool useList)
+void PropertiesSet::load(const string& filename, bool save)
 {
-    myUseMemList = useList;
+  ifstream in(filename.c_str(), ios::in);
 
-    if(filename == "")
-      return;
+  // Loop reading properties
+  for(;;)
+  {
+    // Make sure the stream is still good or we're done 
+    if(!in)
+      break;
 
-    myPropertiesStream.open(filename.c_str(), ios::in);
+    // Get the property list associated with this profile
+    Properties properties(myDefaultProperties);
+    properties.load(in);
 
-    if(myUseMemList)
-    {
-      // Loop reading properties
-      for(;;)
-      {
-        // Make sure the stream is still good or we're done 
-        if(!myPropertiesStream)
-        {
-          break;
-        }
-
-        // Get the property list associated with this profile
-        Properties properties(myDefaultProperties);
-        properties.load(myPropertiesStream);
-
-        // If the stream is still good then insert the properties
-        if(myPropertiesStream)
-        {
-          insert(properties);
-        }
-      }
-    }
+    // If the stream is still good then insert the properties
+    if(in)
+      insert(properties, save);
+  }
+  if(in)
+    in.close();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -222,7 +166,8 @@ void PropertiesSet::saveNode(ostream& out, TreeNode *node)
 {
   if(node)
   {
-    node->props->save(out);
+    if(node->save)
+      node->props->save(out);
     saveNode(out, node->left);
     saveNode(out, node->right);
   }
@@ -246,18 +191,18 @@ uInt32 PropertiesSet::size() const
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-bool PropertiesSet::merge(Properties& properties, string& filename, bool saveOnExit)
+bool PropertiesSet::merge(const Properties& properties, const string& filename)
 {
-  myPropertiesFilename = filename;
-  mySaveOnExit = saveOnExit;
-
-  // Can't merge the properties if the PropertiesSet isn't in memory
-  if(!myUseMemList)
+  ofstream out(filename.c_str());
+  if(out.is_open())
+  {
+    insert(properties, true);  // always save merged properties
+    save(out);
+    out.close();
+    return true;
+  }
+  else
     return false;
-
-  insert(properties);
-
-  return true;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -271,6 +216,7 @@ const Properties& PropertiesSet::defaultProperties()
   ourDefaultProperties.set("Cartridge.Name", "Untitled");
   ourDefaultProperties.set("Cartridge.Note", "");
   ourDefaultProperties.set("Cartridge.Rarity", "");
+  ourDefaultProperties.set("Cartridge.Sound", "Mono");
   ourDefaultProperties.set("Cartridge.Type", "Auto-detect");
 
   ourDefaultProperties.set("Console.LeftDifficulty", "B");

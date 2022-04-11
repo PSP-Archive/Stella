@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: CartFASC.cxx,v 1.6 2005/07/30 16:58:22 urchlay Exp $
+// $Id: CartFASC.cxx,v 1.9 2005/12/17 01:23:07 stephena Exp $
 //============================================================================
 
 #include <assert.h>
@@ -34,7 +34,7 @@ CartridgeFASC::CartridgeFASC(const uInt8* image)
   }
 
   // Initialize RAM with random values
-  Random random;
+  class Random random;
   for(uInt32 i = 0; i < 256; ++i)
   {
     myRAM[i] = random.next();
@@ -177,6 +177,8 @@ bool CartridgeFASC::patch(uInt16 address, uInt8 value)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void CartridgeFASC::bank(uInt16 bank)
 {
+  if(bankLocked) return;
+
   // Remember what bank we're in
   myCurrentBank = bank;
   uInt16 offset = myCurrentBank * 4096;
@@ -216,12 +218,12 @@ bool CartridgeFASC::save(Serializer& out)
   {
     out.putString(cart);
 
-    out.putLong(myCurrentBank);
+    out.putInt(myCurrentBank);
 
     // The 256 bytes of RAM
-    out.putLong(256);
+    out.putInt(256);
     for(uInt32 i = 0; i < 256; ++i)
-      out.putLong(myRAM[i]);
+      out.putInt(myRAM[i]);
   }
   catch(char *msg)
   {
@@ -247,11 +249,11 @@ bool CartridgeFASC::load(Deserializer& in)
     if(in.getString() != cart)
       return false;
 
-    myCurrentBank = (uInt16) in.getLong();
+    myCurrentBank = (uInt16) in.getInt();
 
-    uInt32 limit = (uInt32) in.getLong();
+    uInt32 limit = (uInt32) in.getInt();
     for(uInt32 i = 0; i < limit; ++i)
-      myRAM[i] = (uInt8) in.getLong();
+      myRAM[i] = (uInt8) in.getInt();
   }
   catch(char *msg)
   {

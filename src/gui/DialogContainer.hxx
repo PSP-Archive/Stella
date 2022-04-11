@@ -13,17 +13,17 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: DialogContainer.hxx,v 1.8 2005/08/11 19:12:39 stephena Exp $
+// $Id: DialogContainer.hxx,v 1.13 2006/01/04 01:24:17 stephena Exp $
 //============================================================================
 
 #ifndef DIALOG_CONTAINER_HXX
 #define DIALOG_CONTAINER_HXX
 
+class Dialog;
 class OSystem;
 
-#include "Stack.hxx"
 #include "EventHandler.hxx"
-#include "Dialog.hxx"
+#include "Stack.hxx"
 #include "bspf.hxx"
 
 typedef FixedStack<Dialog *> DialogStack;
@@ -37,10 +37,12 @@ typedef FixedStack<Dialog *> DialogStack;
   a stack, and handles their events.
 
   @author  Stephen Anthony
-  @version $Id: DialogContainer.hxx,v 1.8 2005/08/11 19:12:39 stephena Exp $
+  @version $Id: DialogContainer.hxx,v 1.13 2006/01/04 01:24:17 stephena Exp $
 */
 class DialogContainer
 {
+  friend class EventHandler;
+
   public:
     /**
       Create a new DialogContainer stack
@@ -100,6 +102,15 @@ class DialogContainer
     void handleJoyEvent(int stick, int button, uInt8 state);
 
     /**
+      Handle a joystick axis event.
+
+      @param stick  The joystick number
+      @param axis   The joystick axis
+      @param value  Value associated with given axis
+    */
+    void handleJoyAxisEvent(int stick, int axis, int value);
+
+    /**
       Draw the stack of menus.
     */
     void draw();
@@ -130,17 +141,26 @@ class DialogContainer
     */
     virtual void initialize() = 0;
 
+    // Emulation of mouse using joystick axis events
+    static JoyMouse ourJoyMouse;
+
+  private:
+    void handleJoyMouse(uInt32);
+    void reset();
+
   protected:
     OSystem* myOSystem;
     Dialog*  myBaseDialog;
     DialogStack myDialogStack;
 
     enum {
-      kDoubleClickDelay = 500,
-      kKeyRepeatInitialDelay = 400,
-      kKeyRepeatSustainDelay = 50,
+      kDoubleClickDelay        = 500,
+      kKeyRepeatInitialDelay   = 400,
+      kKeyRepeatSustainDelay   = 50,
       kClickRepeatInitialDelay = kKeyRepeatInitialDelay,
-      kClickRepeatSustainDelay = kKeyRepeatSustainDelay
+      kClickRepeatSustainDelay = kKeyRepeatSustainDelay,
+      kAxisRepeatInitialDelay  = kKeyRepeatInitialDelay,
+      kAxisRepeatSustainDelay  = kKeyRepeatSustainDelay
     };
 
     // Indicates the most current time (in milliseconds) as set by updateTime()
@@ -165,6 +185,15 @@ class DialogContainer
     } myCurrentMouseDown;
     uInt32 myClickRepeatTime;
 	
+    // For continuous events (joyaxisDown)
+    struct {
+      int stick;
+      int axis;
+      int value;
+      int count;
+    } myCurrentAxisDown;
+    uInt32 myAxisRepeatTime;
+
     // Position and time of last mouse click (used to detect double clicks)
     struct {
       int x, y;     // Position of mouse when the click occured

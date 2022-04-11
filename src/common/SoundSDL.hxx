@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: SoundSDL.hxx,v 1.13 2005/06/28 23:18:15 stephena Exp $
+// $Id: SoundSDL.hxx,v 1.16 2005/09/10 16:19:20 bwmott Exp $
 //============================================================================
 
 #ifndef SOUND_SDL_HXX
@@ -28,12 +28,13 @@ class OSystem;
 #include "Sound.hxx"
 #include "bspf.hxx"
 #include "MediaSrc.hxx"
+#include "TIASnd.hxx"
 
 /**
   This class implements the sound API for SDL.
 
   @author Stephen Anthony and Bradford W. Mott
-  @version $Id: SoundSDL.hxx,v 1.13 2005/06/28 23:18:15 stephena Exp $
+  @version $Id: SoundSDL.hxx,v 1.16 2005/09/10 16:19:20 bwmott Exp $
 */
 class SoundSDL : public Sound
 {
@@ -53,17 +54,24 @@ class SoundSDL : public Sound
     /**
       Enables/disables the sound subsystem.
 
-      @param enable  Either true or false, to enable or disable the sound system
+      @param state True or false, to enable or disable the sound system
     */
-    void setEnabled(bool enable);
+    void setEnabled(bool state);
 
     /**
-      The system cycle counter is being adjusting by the specified amount.  Any
+      The system cycle counter is being adjusting by the specified amount. Any
       members using the system cycle counter should be adjusted as needed.
 
       @param amount The amount the cycle counter is being adjusted by
     */
     void adjustCycleCounter(Int32 amount);
+
+    /**
+      Sets the number of channels (mono or stereo sound).
+
+      @param channels The number of channels
+    */
+    void setChannels(uInt32 channels);
 
     /**
       Sets the display framerate.  Sound generation for NTSC and PAL games
@@ -76,10 +84,14 @@ class SoundSDL : public Sound
     /**
       Initializes the sound device.  This must be called before any
       calls are made to derived methods.
-
-      @param forcerestart  Do a soft or hard reset of the sound subsystem
     */
-    void initialize(bool forcerestart = false);
+    void initialize();
+
+    /**
+      Should be called to close the sound device.  Once called the sound
+      device can be started again using the initialize method.
+    */
+    void close();
 
     /**
       Return true iff the sound device was successfully initialized.
@@ -121,8 +133,8 @@ class SoundSDL : public Sound
     /**
       Adjusts the volume of the sound device based on the given direction.
 
-      @param direction  Increase or decrease the current volume by a predefined
-                        amount based on the direction (1 = increase, -1 =decrease)
+      @param direction Increase or decrease the current volume by a predefined
+          amount based on the direction (1 = increase, -1 = decrease)
     */
     void adjustVolume(Int8 direction);
 
@@ -228,6 +240,9 @@ class SoundSDL : public Sound
     };
 
   private:
+    // TIASound emulation object
+    TIASound myTIASound;
+
     // Indicates if the sound subsystem is to be initialized
     bool myIsEnabled;
 
@@ -237,8 +252,11 @@ class SoundSDL : public Sound
     // Indicates the cycle when a sound register was last set
     Int32 myLastRegisterSetCycle;
 
-    // Indicates the base framerate depending on whether the ROM is NTSC or PAL
+    // Indicates the base framerate depending on if the ROM is NTSC or PAL
     uInt32 myDisplayFrameRate;
+
+    // Indicates the number of channels (mono or stereo)
+    uInt32 myNumChannels;
 
     // Log base 2 of the selected fragment size
     double myFragmentSizeLogBase2;
@@ -258,11 +276,7 @@ class SoundSDL : public Sound
   private:
     // Callback function invoked by the SDL Audio library when it needs data
     static void callback(void* udata, uInt8* stream, int len);
-
-    // Closes the audio device
-    void closeAudio();
 };
 
 #endif  // SOUND_SUPPORT
-
 #endif

@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Settings.cxx,v 1.57 2005/08/30 17:51:26 stephena Exp $
+// $Id: Settings.cxx,v 1.69 2005/12/24 22:50:52 stephena Exp $
 //============================================================================
 
 #include <cassert>
@@ -39,7 +39,7 @@ Settings::Settings(OSystem* osystem)
 
   // Now fill it with options that are common to all versions of Stella
   set("video", "soft");
-  set("video_driver", "");
+  set("dirtyrects", "true");
 
   set("gl_filter", "nearest");
   set("gl_aspect", "2.0");
@@ -47,8 +47,8 @@ Settings::Settings(OSystem* osystem)
 
   set("zoom", "2");
   set("fullscreen", "false");
-  set("grabmouse", "false");
   set("center", "true");
+  set("grabmouse", "false");
   set("palette", "standard");
   set("debugheight", "0");
 
@@ -58,7 +58,15 @@ Settings::Settings(OSystem* osystem)
 
   set("keymap", "");
   set("joymap", "");
+  set("joyaxismap", "");
   set("paddle", "0");
+  set("sa1", "left");
+  set("sa2", "right");
+  set("mspeed", "50");
+  set("p1speed", "50");
+  set("p2speed", "50");
+  set("p3speed", "50");
+  set("p4speed", "50");
 
   set("showinfo", "false");
 
@@ -195,7 +203,7 @@ void Settings::validate()
   int i;
 
   s = getString("video");
-  if(s != "soft" && s != "hard" && s != "gl")
+  if(s != "soft" && s != "gl")
     set("video", "soft");
 
 #ifdef DISPLAY_OPENGL
@@ -255,7 +263,6 @@ void Settings::usage()
     << "                 soft            SDL software mode\n"
   #ifdef DISPLAY_OPENGL
     << "                 gl              SDL OpenGL mode\n"
-    << "  -video_driver <type>         SDL Video driver (see manual).\n"
     << endl
     << "  -gl_filter    <type>         Type is one of the following:\n"
     << "                 nearest         Normal scaling (GL_NEAREST)\n"
@@ -266,24 +273,24 @@ void Settings::usage()
   #endif
     << "  -zoom         <size>         Makes window be 'size' times normal\n"
     << "  -fullscreen   <1|0>          Play the game in fullscreen mode\n"
-    << "  -grabmouse    <1|0>          Keeps the mouse in the game window\n"
     << "  -center       <1|0>          Centers game window (if possible)\n"
+    << "  -grabmouse    <1|0>          Keeps the mouse in the game window\n"
     << "  -palette      <original|     Use the specified color palette\n"
     << "                 standard|\n"
     << "                 z26>\n"
     << "  -framerate    <number>       Display the given number of frames per second\n"
-    << "  -debug        <1|0>          Start in the debugger\n"
-    << "  -debugheight  <number>       Set height of debugger in lines of text (NOT pixels)\n"
-    << "  -holdreset                   Start the emulator with the Game Reset switch held down\n"
-    << "  -holdselect                  Start the emulator with the Game Select switch held down\n"
-    << "  -holdbutton0                 Start the emulator with the left joystick button held down\n"
+    << endl
   #ifdef SOUND_SUPPORT
     << "  -sound        <1|0>          Enable sound generation\n"
+    << "  -channels     <1|2>          Enable mono or stereo sound\n"
     << "  -fragsize     <number>       The size of sound fragments (must be a power of two)\n"
     << "  -volume       <number>       Set the volume (0 - 100)\n"
+    << endl
   #endif
     << "  -paddle       <0|1|2|3>      Indicates which paddle the mouse should emulate\n"
     << "  -showinfo     <1|0>          Shows some game info\n"
+    << "  -sa1          <left|right>   Stelladaptor 1 emulates specified joystick port\n"
+    << "  -sa2          <left|right>   Stelladaptor 2 emulates specified joystick port\n"
   #ifdef UNIX
     << "  -accurate     <1|0>          Accurate game timing (uses more CPU)\n"
   #endif
@@ -291,12 +298,20 @@ void Settings::usage()
     << "  -ssdir        <path>         The directory to save snapshot files to\n"
     << "  -ssname       <name>         How to name the snapshot (romname or md5sum)\n"
     << "  -sssingle     <1|0>          Generate single snapshot instead of many\n"
+    << endl
   #endif
     << "  -listrominfo                 Display contents of stella.pro, one line per ROM entry\n"
     << "  -help                        Show the text you're now reading\n"
+  #ifdef DEVELOPER_SUPPORT
     << endl
     << " The following options are meant for developers\n"
     << " Arguments are more fully explained in the manual\n"
+    << endl
+    << "   -debugheight  <number>      Set height of debugger in lines of text (NOT pixels)\n"
+    << "   -debug                      Start in debugger mode\n"
+    << "   -holdreset                  Start the emulator with the Game Reset switch held down\n"
+    << "   -holdselect                 Start the emulator with the Game Select switch held down\n"
+    << "   -holdbutton0                Start the emulator with the left joystick button held down\n"
     << endl
     << "   -pro         <props file>   Use the given properties file instead of stella.pro\n"
     << "   -type        <arg>          Sets the 'Cartridge.Type' property\n"
@@ -311,8 +326,8 @@ void Settings::usage()
     << "   -ystart      <arg>          Sets the 'Display.YStart' property\n"
     << "   -width       <arg>          Sets the 'Display.Width' property\n"
     << "   -height      <arg>          Sets the 'Display.Height' property\n"
-    << "   -cpu         <arg>          Sets the 'Emulation.CPU' property\n"
     << "   -hmove       <arg>          Sets the 'Emulation.HmoveBlanks' property\n"
+  #endif
     << endl;
 #endif
 }
@@ -471,14 +486,14 @@ bool Settings::getBool(const string& key) const
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-string Settings::getString(const string& key) const
+const string& Settings::getString(const string& key) const
 {
   // Try to find the named setting and answer its value
   for(unsigned int i = 0; i < mySize; ++i)
     if(key == mySettings[i].key)
       return mySettings[i].value;
 
-  return "";
+  return EmptyString;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

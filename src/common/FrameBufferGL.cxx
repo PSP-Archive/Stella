@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: FrameBufferGL.cxx,v 1.40 2005/08/11 19:12:37 stephena Exp $
+// $Id: FrameBufferGL.cxx,v 1.43 2005/09/15 19:43:36 stephena Exp $
 //============================================================================
 
 #ifdef DISPLAY_OPENGL
@@ -254,8 +254,6 @@ void FrameBufferGL::preFrameUpdate()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void FrameBufferGL::postFrameUpdate()
 {
-  // Do the following twice, since OpenGL mode is double-buffered,
-  // and we need the contents placed in both buffers
   if(theRedrawTIAIndicator || myDirtyFlag)
   {
     // Texturemap complete texture to surface so we have free scaling 
@@ -272,15 +270,8 @@ void FrameBufferGL::postFrameUpdate()
       glTexCoord2f(myTexCoord[0], myTexCoord[3]); glVertex2i(0, h);
     glEnd();
 
-    // Now show all changes made to the textures
+    // Now show all changes made to the texture
     SDL_GL_SwapBuffers();
-
-    glBegin(GL_QUADS);
-      glTexCoord2f(myTexCoord[0], myTexCoord[1]); glVertex2i(0, 0);
-      glTexCoord2f(myTexCoord[2], myTexCoord[1]); glVertex2i(w, 0);
-      glTexCoord2f(myTexCoord[2], myTexCoord[3]); glVertex2i(w, h);
-      glTexCoord2f(myTexCoord[0], myTexCoord[3]); glVertex2i(0, h);
-    glEnd();
 
     myDirtyFlag = false;
   }
@@ -436,7 +427,10 @@ void FrameBufferGL::translateCoords(Int32* x, Int32* y)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void FrameBufferGL::addDirtyRect(uInt32 x, uInt32 y, uInt32 w, uInt32 h)
 {
-  // FIXME
+  // TODO
+  //    Add logic to create one large dirty-rect that encompasses all
+  //    smaller dirty rects.  Then in postFrameUpdate(), change the
+  //    coordinates to only update that portion of the texture.
   myDirtyFlag = true;
 }
 

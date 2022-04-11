@@ -13,13 +13,12 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: LauncherDialog.cxx,v 1.30 2005/08/30 01:10:54 stephena Exp $
+// $Id: LauncherDialog.cxx,v 1.36 2006/01/05 18:53:23 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
 //============================================================================
 
-#include <algorithm>
 #include <sstream>
 
 #include "OSystem.hxx"
@@ -40,6 +39,10 @@
 
 #include "bspf.hxx"
 
+/////////////////////////////////////////
+// TODO - make this dialog font sensitive
+/////////////////////////////////////////
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 LauncherDialog::LauncherDialog(OSystem* osystem, DialogContainer* parent,
                                int x, int y, int w, int h)
@@ -50,10 +53,12 @@ LauncherDialog::LauncherDialog(OSystem* osystem, DialogContainer* parent,
     myQuitButton(NULL),
     myList(NULL),
     myGameList(NULL),
-    myProgressBar(NULL)
+    myProgressBar(NULL),
+    mySelectedItem(0)
 {
   const GUI::Font& font = instance()->font();
   const int fontHeight = font.getFontHeight();
+  WidgetArray wid;
 
   // Show game name
   new StaticTextWidget(this, 10, 8, 200, fontHeight,
@@ -71,31 +76,51 @@ LauncherDialog::LauncherDialog(OSystem* osystem, DialogContainer* parent,
 
 #ifndef MAC_OSX
   myStartButton = new ButtonWidget(this, xpos, _h - 24, width, 16, "Play", kStartCmd, 'S');
+  myStartButton->setEditable(true);
+  wid.push_back(myStartButton);
     xpos += space + width;
   myOptionsButton = new ButtonWidget(this, xpos, _h - 24, width, 16, "Options", kOptionsCmd, 'O');
+  myOptionsButton->setEditable(true);
+  wid.push_back(myOptionsButton);
     xpos += space + width;
   myReloadButton = new ButtonWidget(this, xpos, _h - 24, width, 16, "Reload", kReloadCmd, 'R');
+  myReloadButton->setEditable(true);
+  wid.push_back(myReloadButton);
     xpos += space + width;
   myQuitButton = new ButtonWidget(this, xpos, _h - 24, width, 16, "Quit", kQuitCmd, 'Q');
+  myQuitButton->setEditable(true);
+  wid.push_back(myQuitButton);
     xpos += space + width;
+  mySelectedItem = 0;  // Highlight 'Play' button
 #else
   myQuitButton = new ButtonWidget(this, xpos, _h - 24, width, 16, "Quit", kQuitCmd, 'Q');
+  myQuitButton->setEditable(true);
+  wid.push_back(myQuitButton);
     xpos += space + width;
   myOptionsButton = new ButtonWidget(this, xpos, _h - 24, width, 16, "Options", kOptionsCmd, 'O');
+  myOptionsButton->setEditable(true);
+  wid.push_back(myOptionsButton);
     xpos += space + width;
   myReloadButton = new ButtonWidget(this, xpos, _h - 24, width, 16, "Reload", kReloadCmd, 'R');
+  myReloadButton->setEditable(true);
+  wid.push_back(myReloadButton);
     xpos += space + width;
   myStartButton = new ButtonWidget(this, xpos, _h - 24, width, 16, "Start", kStartCmd, 'Q');
+  myStartButton->setEditable(true);
+  wid.push_back(myStartButton);
     xpos += space + width;
+  mySelectedItem = 3;  // Highlight 'Play' button
 #endif
 
   // Add list with game titles
+  // The list isn't added to focus objects, but is instead made 'sticky'
+  // This means it will act as if it were focused (wrt how it's drawn), but
+  // won't actually be able to lose focus
   myList = new StringListWidget(this, instance()->font(),
-                                10, 24, _w - 20, _h - 24 - 26 - 10 - 10); // FIXME_NOW
+                                10, 24, _w - 20, _h - 24 - 26 - 10 - 10);
   myList->setNumberingMode(kListNumberingOff);
   myList->setEditable(false);
-  myList->setFlags(WIDGET_NODRAW_FOCUS);
-  addFocusWidget(myList);
+  myList->setFlags(WIDGET_STICKY_FOCUS);
 
   // Add note textwidget to show any notes for the currently selected ROM
   new StaticTextWidget(this, 20, _h - 43, 30, fontHeight, "Note:", kTextAlignLeft);
@@ -110,6 +135,8 @@ LauncherDialog::LauncherDialog(OSystem* osystem, DialogContainer* parent,
   // Create a game list, which contains all the information about a ROM that
   // the launcher needs
   myGameList = new GameList();
+
+  addToFocusList(wid);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -126,6 +153,8 @@ void LauncherDialog::loadConfig()
   // has been called (and we should reload the list).
   if(myList->getList().isEmpty())
     updateListing();
+
+  Dialog::setFocus(getFocusList()[mySelectedItem]);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -154,6 +183,7 @@ void LauncherDialog::updateListing(bool fullReload)
   if(romdir == "")
   {
     myOptionsButton->setEnabled(true);
+    myQuitButton->setEnabled(true);
     parent()->addDialog(myOptions);
     return;
   }
@@ -241,11 +271,7 @@ void LauncherDialog::loadListFromDisk()
     name = props.get("Cartridge.Name");
     note = props.get("Cartridge.Note");
 
-    // Some games may not have a name, since there may not
-    // be an entry in stella.pro.  In that case, we use the rom name
-    if(name == "Untitled")
-      name = files[idx].displayName();
-
+    // Indicate that this ROM doesn't have a properties entry
     myGameList->appendGame(rom, name, note);
 
     // Update the progress bar, indicating one more ROM has been processed
@@ -329,13 +355,67 @@ string LauncherDialog::MD5FromFile(const string& path)
   int size = -1;
   string md5 = "";
 
-  if(instance()->openROM(path, &image, &size))
-    md5 = MD5(image, size);
-
-  if(size != -1)
-    delete[] image;
+  if(instance()->openROM(path, md5, &image, &size))
+    if(size != -1)
+      delete[] image;
 
   return md5;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void LauncherDialog::handleKeyDown(int ascii, int keycode, int modifiers)
+{
+  // Only detect the cursor keys, otherwise pass to base class
+  switch(ascii)
+  {
+    case kCursorLeft:
+      mySelectedItem--;
+      if(mySelectedItem < 0) mySelectedItem = 3;
+      Dialog::setFocus(getFocusList()[mySelectedItem]);
+      break;
+
+    case kCursorRight:
+      mySelectedItem++;
+      if(mySelectedItem > 3) mySelectedItem = 0;
+      Dialog::setFocus(getFocusList()[mySelectedItem]);
+      break;
+
+    case ' ':  // Used to activate currently focused button
+      Dialog::handleKeyDown(ascii, keycode, modifiers);
+      break;
+
+    default:
+      if(!myList->handleKeyDown(ascii, keycode, modifiers))
+        Dialog::handleKeyDown(ascii, keycode, modifiers);
+      break;
+  }
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void LauncherDialog::handleJoyAxis(int stick, int axis, int value)
+{
+  // We make the (hopefully) valid assumption that all joysticks
+  // treat axis the same way.  Eventually, we may need to remap
+  // these actions of this assumption is invalid.
+  // TODO - make this work better with analog axes ...
+  int key = -1;
+  if(axis % 2 == 0)  // x-direction
+  {
+    if(value < 0)
+      key = kCursorLeft;
+    else if(value > 0)
+      key = kCursorRight;
+  }
+  else   // y-direction
+  {
+    if(value < 0)
+      key = kCursorUp;
+    else if(value > 0)
+      key = kCursorDown;
+  }
+
+  if(key != -1)
+    handleKeyDown(key, 0, 0);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

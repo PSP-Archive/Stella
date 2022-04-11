@@ -185,7 +185,7 @@
 "Cartridge.Manufacturer" "TechnoVision"
 "Cartridge.Rarity" "Extremely Rare"
 "Display.YStart" "48"
-"Display.Height" "220"
+"Display.Format" "PAL"
 ""
 
 "Cartridge.MD5" "01293bd90a4579abb7aed2f7d440681f"
@@ -1294,8 +1294,8 @@
 "Cartridge.Name" "Alien Pac-Man (Rev 2) by PacManPlus (Alien Hack)"
 "Display.YStart" "39"
 "Display.Height" "188"
-"Display.Width" "128"
-"Display.XStart" "16"
+"Display.Width" "136"
+"Display.XStart" "12"
 ""
 
 "Cartridge.MD5" "103f1756d9dc0dd2b16b53ad0f0f1859"
@@ -2372,7 +2372,7 @@
 ""
 
 "Cartridge.MD5" "19e761e53e5ec8e9f2fceea62715ca06"
-"Cartridge.Name" "Scuba Diver (Panda) (PAL)"
+"Cartridge.Name" "Scuba Diver (Panda)"
 "Cartridge.Manufacturer" "Panda"
 "Cartridge.ModelNo" "104"
 "Cartridge.Rarity" "Rare"
@@ -2777,7 +2777,7 @@
 ""
 
 "Cartridge.MD5" "203049f4d8290bb4521cc4402415e737"
-"Cartridge.Name" "Polaris (1983) (Tigervision)"
+"Cartridge.Name" "Polaris (1983) (Tigervision) (PAL)"
 "Cartridge.Manufacturer" "Tigervision"
 "Cartridge.ModelNo" "7-007"
 "Cartridge.Rarity" "Extremely Rare"
@@ -2786,6 +2786,7 @@
 "Display.Width" "144"
 "Display.XStart" "8"
 "Display.YStart" "61"
+"Display.Height" "250"
 ""
 
 "Cartridge.MD5" "203b1efc6101d4b9d83bb6cc1c71f67f"
@@ -2967,6 +2968,7 @@
 
 "Cartridge.MD5" "22b22c4ce240303012e8a9596ae8d189"
 "Cartridge.Name" "Skeleton+ (03-05-2003) (Eric Ball) (PAL)"
+"Cartridge.Sound" "Stereo"
 "Display.Format" "PAL"
 "Display.Height" "256"
 ""
@@ -3764,7 +3766,7 @@
 ""
 
 "Cartridge.MD5" "2bd00beefdb424fa39931a75e890695d"
-"Cartridge.Name" "Road Runner (1989) (Atari) (PAL) [a1]"
+"Cartridge.Name" "Road Runner (1989) (Atari) [a1]"
 "Cartridge.Manufacturer" "Atari"
 "Cartridge.ModelNo" "CX2663"
 "Cartridge.Rarity" "Extremely Rare"
@@ -3901,8 +3903,8 @@
 "Cartridge.Type" "F6SC"
 "Display.Format" "PAL"
 "Display.Height" "194"
-"Display.Width" "128"
-"Display.XStart" "16"
+"Display.Width" "136"
+"Display.XStart" "8"
 "Display.YStart" "42"
 ""
 
@@ -4602,7 +4604,7 @@
 ""
 
 "Cartridge.MD5" "36306070f0c90a72461551a7a4f3a209"
-"Cartridge.Name" "Octopus (AKA Name That Game) (Carrere Video) (PAL) [!]"
+"Cartridge.Name" "Octopus (AKA Name That Game) (Carrere Video) [!]"
 "Cartridge.Manufacturer" "Carrere Video"
 "Cartridge.ModelNo" "VC 1007"
 "Cartridge.Rarity" "Extremely Rare"
@@ -5401,7 +5403,7 @@
 ""
 
 "Cartridge.MD5" "3fe43915e5655cf69485364e9f464097"
-"Cartridge.Name" "Fisher Price (CCE) (PAL) [!]"
+"Cartridge.Name" "Fisher Price (CCE) [!]"
 "Cartridge.Manufacturer" "CCE"
 "Display.Height" "196"
 "Display.YStart" "42"
@@ -5535,6 +5537,7 @@
 
 "Cartridge.MD5" "40e12c008037a323a1290c8fa4d2fe7f"
 "Cartridge.Name" "Skeleton (NTSC) (06-09-2002) (Eric Ball)"
+"Cartridge.Sound" "Stereo"
 ""
 
 "Cartridge.MD5" "40d9f5709877ecf3dd1184f9791dd35e"
@@ -5582,6 +5585,8 @@
 "Cartridge.Name" "Skeleton (Complete) (06-09-2002) (Eric Ball)"
 "Cartridge.Manufacturer" "Eric Ball"
 "Cartridge.Rarity" "New Release"
+"Cartridge.Sound" "Stereo"
+"Display.Format" "PAL"
 ""
 
 "Cartridge.MD5" "4191b671bcd8237fc8e297b4947f2990"
@@ -5706,10 +5711,25 @@
 "Cartridge.Name" "Star Fire (17-02-2003) (MP)"
 ""
 
-"Cartridge.MD5" "43f8459d39fb4eddf9186d62722ff795"
-"Cartridge.Name" "Skeleton+ (17-04-2003) (Eric Ball) (PAL)"
-"Display.Format" "PAL"
-"Display.Height" "256"
+"Cartridge.MD5"           "eafe8b40313a65792e88ff9f2fe2655c"
+"Cartridge.Name"          "Skeleton+ (NTSC)"
+"Cartridge.Manufacturer"  "Eric Ball"
+"Cartridge.ModelNo"       "ELB004"
+"Cartridge.Note"          "Stereo sound"
+"Cartridge.Rarity"        "Homebrew"
+"Cartridge.Type"          "4K"
+"Cartridge.Sound"         "Stereo"
+""
+
+"Cartridge.MD5"           "63c7395d412a3cd095ccdd9b5711f387"
+"Cartridge.Name"          "Skeleton+ (PAL)"
+"Cartridge.Manufacturer"  "Eric Ball"
+"Cartridge.ModelNo"       "ELB005"
+"Cartridge.Note"          "Stereo sound"
+"Cartridge.Rarity"        "Homebrew"
+"Cartridge.Type"          "4K"
+"Cartridge.Sound"         "Stereo"
+"Display.Format"          "PAL"
 ""
 
 "Cartridge.MD5" "458883f1d952cd772cf0057abca57497"
@@ -5826,12 +5846,13 @@
 ""
 
 "Cartridge.MD5" "45cb0f41774b78def53331e4c3bf3362"
-"Cartridge.Name" "Name This Game (AKA Octopus) (1982) (US Games) [!]"
+"Cartridge.Name" "Name This Game (AKA Octopus) (1982) (US Games) (PAL) [!]"
 "Cartridge.Manufacturer" "US Games"
 "Cartridge.ModelNo" "VC 1007"
 "Cartridge.Rarity" "Extremely Rare"
 "Display.Format" "PAL"
 "Display.YStart" "42"
+"Display.Height" "250"
 ""
 
 "Cartridge.MD5" "4690fdb70c86604bb35da26696818667"
@@ -5865,7 +5886,7 @@
 ""
 
 "Cartridge.MD5" "468f2dec984f3d4114ea84f05edf82b6"
-"Cartridge.Name" "Miner 2049er Volume II (1983) (Tigervision)"
+"Cartridge.Name" "Miner 2049er Volume II (1983) (Tigervision) (PAL)"
 "Cartridge.Manufacturer" "Tigervision"
 "Cartridge.ModelNo" "7-011"
 "Cartridge.Rarity" "Extremely Rare"
@@ -5898,7 +5919,7 @@
 ""
 
 "Cartridge.MD5" "47464694e9cce07fdbfd096605bf39d4"
-"Cartridge.Name" "Double Dragon (1989) (Activision)"
+"Cartridge.Name" "Double Dragon (1989) (Activision) (PAL)"
 "Cartridge.Manufacturer" "Activision"
 "Cartridge.ModelNo" "AK-050-04"
 "Cartridge.Rarity" "Rare"
@@ -6172,6 +6193,7 @@
 
 "Cartridge.MD5" "49571b26f46620a85f93448359324c28"
 "Cartridge.Name" "Save Our Ship (PAL) [p1][!]"
+"Display.Format" "PAL"
 ""
 
 "Cartridge.MD5" "497f3d2970c43e5224be99f75e97cbbb"
@@ -6478,6 +6500,13 @@
 
 "Cartridge.MD5" "4dbf47c7f5ac767a3b07843a530d29a5"
 "Cartridge.Name" "Breaking News (2002) (Ric Pryor) (Bump 'n' Jump Hack)"
+"Cartridge.Type" "E7"
+"Cartridge.Manufacturer" "Ric Pryor"
+"Cartridge.Note" "Bump 'n' Jump Hack"
+"Display.XStart" "8"
+"Display.Width" "152"
+"Display.YStart" "41"
+"Display.Height" "188"
 ""
 
 "Cartridge.MD5" "4d8396deeabb40b5e8578276eb5a8b6d"
@@ -7935,7 +7964,7 @@
 ""
 
 "Cartridge.MD5" "624e0a77f9ec67d628211aaf24d8aea6"
-"Cartridge.Name" "Sea Hawk (1987) (Panda) (PAL)"
+"Cartridge.Name" "Sea Hawk (1987) (Panda)"
 "Cartridge.Manufacturer" "Panda"
 "Cartridge.ModelNo" "108"
 "Cartridge.Rarity" "Rare"
@@ -8089,12 +8118,6 @@
 "Display.YStart" "27"
 ""
 
-"Cartridge.MD5" "63c7395d412a3cd095ccdd9b5711f387"
-"Cartridge.Name" "Skeleton+ (14-05-2003) (Eric Ball) (PAL)"
-"Display.Format" "PAL"
-"Display.Height" "256"
-""
-
 "Cartridge.MD5" "640a08e9ca019172d612df22a9190afb"
 "Cartridge.Name" "Joust (1982) (Atari) (PAL) [!]"
 "Cartridge.Manufacturer" "Atari"
@@ -8102,9 +8125,7 @@
 "Cartridge.Rarity" "Common"
 "Cartridge.Type" "F8"
 "Display.Format" "PAL"
-"Display.Height" "205"
-"Display.Width" "144"
-"Display.XStart" "8"
+"Display.Height" "250"
 "Display.YStart" "64"
 ""
 
@@ -9641,6 +9662,7 @@
 
 "Cartridge.MD5" "75b22fdf632d76e246433db1ebccd3c4"
 "Cartridge.Name" "Skeleton+ (05-05-2003) (Eric Ball) (PAL)"
+"Cartridge.Sound" "Stereo"
 "Display.Format" "PAL"
 "Display.Height" "256"
 ""
@@ -10546,8 +10568,7 @@
 "Cartridge.Rarity" "Rare"
 "Cartridge.Type" "F6"
 "Display.Format" "PAL"
-"Display.FrameRate" "20"
-"Display.Height" "192"
+"Display.Height" "230"
 "Display.Width" "144"
 "Display.XStart" "8"
 "Display.YStart" "43"
@@ -11852,12 +11873,12 @@
 ""
 
 "Cartridge.MD5" "9222b25a0875022b412e8da37e7f6887"
-"Cartridge.Name" "Dice Puzzle (Panda) (PAL)"
+"Cartridge.Name" "Dice Puzzle (Panda)"
 "Cartridge.Manufacturer" "Panda"
 "Cartridge.ModelNo" "106"
 "Cartridge.Rarity" "Rare"
-"Display.Format" "PAL"
-"Display.YStart" "32"
+"Display.YStart" "25"
+"Display.Height" "220"
 ""
 
 "Cartridge.MD5" "91fdb6541f70c40b16aabf8308123be8"
@@ -12096,10 +12117,9 @@
 "Cartridge.Name" "Alien (CCE)"
 "Cartridge.Manufacturer" "CCE"
 "Cartridge.Type" "4K"
-"Display.FrameRate" "60"
 "Display.Height" "188"
-"Display.Width" "128"
-"Display.XStart" "16"
+"Display.Width" "136"
+"Display.XStart" "12"
 "Display.YStart" "39"
 ""
 
@@ -13498,8 +13518,8 @@
 "Cartridge.Name" "Attack Of The Mutant Space Urchins (2002) (Barry Laws Jr.) (Alien Hack)"
 "Display.YStart" "38"
 "Display.Height" "190"
-"Display.Width" "128"
-"Display.XStart" "16"
+"Display.Width" "136"
+"Display.XStart" "12"
 ""
 
 "Cartridge.MD5" "a7b96a8150600b3e800a4689c3ec60a2"
@@ -13580,8 +13600,8 @@
 "Cartridge.Name" "SwordQuest - Earthworld (1982) (Atari) (PAL) [!]"
 "Cartridge.Manufacturer" "Atari"
 "Display.Format" "PAL"
-"Display.Height" "231"
-"Display.YStart" "44"
+"Display.Height" "250"
+"Display.YStart" "35"
 ""
 
 "Cartridge.MD5" "a93e8ea1f565c3c1e86b708cf0dc2fa9"
@@ -15766,7 +15786,7 @@
 ""
 
 "Cartridge.MD5" "c63a98ca404aa5ee9fcff1de488c3f43"
-"Cartridge.Name" "Venture (1988) (Atari) (PAL) [!]"
+"Cartridge.Name" "Venture (1988) (Atari) [!]"
 "Cartridge.Manufacturer" "Atari"
 "Cartridge.ModelNo" "CX26145"
 "Cartridge.Rarity" "Rare"
@@ -16390,6 +16410,9 @@
 "Cartridge.MD5" "cddabfd68363a76cd30bee4e8094c646"
 "Cartridge.Name" "Magicard (CommaVid)"
 "Cartridge.Manufacturer" "CommaVid"
+"Cartridge.Type" "CV"
+"Controller.Left" "Keyboard"
+"Display.YStart" "25"
 ""
 
 "Cartridge.MD5" "cdc1a5c61d7488eadc9aba36166b253d"
@@ -16597,7 +16620,7 @@
 "Cartridge.Manufacturer" "Paul Slocum"
 "Cartridge.Note" "Hack of Berzerk (Atari)"
 "Cartridge.Rarity" "New Release (Hack)"
-"Cartridge.Type" "4K"
+"Cartridge.Type" "F8"
 "Display.FrameRate" "20"
 "Display.Height" "188"
 "Display.Width" "152"
@@ -16612,6 +16635,7 @@
 
 "Cartridge.MD5" "cfef1a2d1f6a5ee7a5e1f43f3056f112"
 "Cartridge.Name" "Skeleton+ (05-05-2003) (Eric Ball) (NTSC)"
+"Cartridge.Sound" "Stereo"
 ""
 
 "Cartridge.MD5" "cfee10bd7119f10b136921ced2ee8972"
@@ -17543,7 +17567,6 @@
 "Cartridge.Rarity" "Common"
 "Cartridge.Type" "4K"
 "Display.Format" "PAL"
-"Display.Height" "200"
 "Display.YStart" "38"
 ""
 
@@ -18535,6 +18558,7 @@
 "Display.YStart" "64"
 "Display.Width" "152"
 "Display.XStart" "8"
+"Display.Height" "220"
 ""
 
 "Cartridge.MD5" "e7864caaf9ec49ed67b1904ce8602690"
@@ -18791,12 +18815,8 @@
 "Controller.Right" "Paddles"
 ""
 
-"Cartridge.MD5" "eafe8b40313a65792e88ff9f2fe2655c"
-"Cartridge.Name" "Skeleton+ (14-05-2003) (Eric Ball) (NTSC)"
-""
-
 "Cartridge.MD5" "eaf744185d5e8def899950ba7c6e7bb5"
-"Cartridge.Name" "Xenophobe (1990) (Atari) (PAL) [a1]"
+"Cartridge.Name" "Xenophobe (1990) (Atari) [a1]"
 "Cartridge.Manufacturer" "Atari"
 "Cartridge.ModelNo" "CX26172"
 "Cartridge.Rarity" "Extremely Rare"
@@ -18989,7 +19009,7 @@
 ""
 
 "Cartridge.MD5" "ed1a784875538c7871d035b7a98c2433"
-"Cartridge.Name" "Save Our Ship (Technovision) (PAL) [a1]"
+"Cartridge.Name" "Save Our Ship (Technovision) [a1]"
 "Cartridge.Rarity" "Extremely Rare"
 "Display.Height" "214"
 ""
@@ -19273,10 +19293,9 @@
 "Cartridge.ModelNo" "11006"
 "Cartridge.Rarity" "Rare"
 "Cartridge.Type" "4K"
-"Display.FrameRate" "60"
-"Display.Height" "188"
-"Display.Width" "128"
-"Display.XStart" "16"
+"Display.Height" "189"
+"Display.Width" "136"
+"Display.XStart" "12"
 "Display.YStart" "39"
 ""
 
@@ -19470,6 +19489,7 @@
 
 "Cartridge.MD5" "f20bd756f3990e06c492f53cd0168e68"
 "Cartridge.Name" "Skeleton+ (03-05-2003) (Eric Ball) (NTSC)"
+"Cartridge.Sound" "Stereo"
 ""
 
 "Cartridge.MD5" "f1eeeccc4bba6999345a2575ae96508e"
@@ -19848,7 +19868,7 @@
 ""
 
 "Cartridge.MD5" "f7a138eed69665b5cd1bfa796a550b01"
-"Cartridge.Name" "Espial (1983) (Tigervision)"
+"Cartridge.Name" "Espial (1983) (Tigervision) (PAL)"
 "Cartridge.Manufacturer" "Tigervision"
 "Cartridge.ModelNo" "7-012"
 "Cartridge.Rarity" "Extremely Rare"
@@ -20010,6 +20030,7 @@
 "Cartridge.Name" "Confrontation (1983) (Answer Software)"
 "Cartridge.Manufacturer" "Answer"
 "Display.YStart" "32"
+"Display.Height" "220"
 ""
 
 "Cartridge.MD5" "f91fb8da3223b79f1c9a07b77ebfa0b2"
@@ -20124,6 +20145,7 @@
 
 "Cartridge.MD5" "f98d869f287d2ce4f8fb36e0686929d9"
 "Cartridge.Name" "Skeleton+ (17-04-2003) (Eric Ball) (NTSC)"
+"Cartridge.Sound" "Stereo"
 ""
 
 "Cartridge.MD5" "f992a39b46aa48188fab12ad3809ae4a"
@@ -20322,10 +20344,10 @@
 "Cartridge.ModelNo" "MT5662"
 "Cartridge.Rarity" "Uncommon"
 "Cartridge.Type" "4K"
-"Display.Height" "163"
+"Display.Height" "181"
 "Display.Width" "144"
 "Display.XStart" "8"
-"Display.YStart" "53"
+"Display.YStart" "41"
 ""
 
 "Cartridge.MD5" "fb833ed50c865a9a505a125fc9d79a7e"
@@ -20430,8 +20452,8 @@
 "Cartridge.Rarity" "Rare"
 "Cartridge.Type" "F6SC"
 "Display.Height" "194"
-"Display.Width" "128"
-"Display.XStart" "16"
+"Display.Width" "136"
+"Display.XStart" "8"
 "Display.YStart" "42"
 ""
 
@@ -20691,4 +20713,33 @@
 "Cartridge.Type" "E0" 
 "Display.Height" "192" 
 "Display.YStart" "38" 
+""
+
+"Cartridge.MD5" "43f8459d39fb4eddf9186d62722ff795"
+"Display.Format" "PAL"
+"Display.Height" "250"
+"Cartridge.Name" "Skeleton+ (17-04-2003) (Eric Ball) (PAL)"
+"Cartridge.Sound" "Stereo"
+""
+
+"Cartridge.MD5" "278f14887d601b5e5b620f1870bc09f6"
+"Cartridge.Name" "Swoops! (v0.96) (Thomas Jentzsch)"
+"Cartridge.Note" "Uses the Joystick (L) and Paddle (R) Controllers"
+"Controller.Right" "Paddles"
+"Display.YStart" "28"
+""
+
+"Cartridge.MD5" "5d8f1ab95362acdf3426d572a6301bf2"
+"Cartridge.Name" "Swoops! (v0.96) (Thomas Jentzsch) (PAL)"
+"Cartridge.Note" "Uses the Joystick (L) and Paddle (R) Controllers"
+"Controller.Right" "Paddles"
+"Display.Format" "PAL"
+"Display.YStart" "40"
+"Display.Height" "240"
+""
+
+"Cartridge.MD5" "2f16663b01591539624d0ef52934a17d"
+"Cartridge.Name" "Rocky and Bullwinkle"
+"Cartridge.Manufacturer" "M Network"
+"Cartridge.Rarity" "Prototype"
 ""

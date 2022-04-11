@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: CommandDialog.hxx,v 1.1 2005/08/29 18:36:42 stephena Exp $
+// $Id: CommandDialog.hxx,v 1.4 2006/01/04 01:24:17 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
@@ -35,7 +35,39 @@ class CommandDialog : public Dialog
     CommandDialog(OSystem* osystem, DialogContainer* parent);
     ~CommandDialog();
 
+  protected:
+    virtual void handleKeyDown(int ascii, int keycode, int modifiers);
+    virtual void handleJoyAxis(int stick, int axis, int value);
     virtual void handleCommand(CommandSender* sender, int cmd, int data, int id);
+
+    virtual bool wantsEvents() { return true; }
+
+  private:
+    int mySelectedItem;
+
+    enum {
+      kSelectCmd     = 'Csel',
+      kResetCmd      = 'Cres',
+      kColorCmd      = 'Ccol',
+      kBWCmd         = 'Cbwt',
+      kLeftDiffACmd  = 'Clda',
+      kLeftDiffBCmd  = 'Cldb',
+      kRightDiffACmd = 'Crda',
+      kRightDiffBCmd = 'Crdb',
+      kSaveStateCmd  = 'Csst',
+      kStateSlotCmd  = 'Ccst',
+      kLoadStateCmd  = 'Clst',
+      kSnapshotCmd   = 'Csnp',
+      kFormatCmd     = 'Cfmt',
+      kPaletteCmd    = 'Cpal',
+      kReloadRomCmd  = 'Crom',
+      kExitCmd       = 'Clex'
+    };
+
+    enum {
+      kNumRows = 4,
+      kNumCols = 4
+    };
 };
 
 #endif

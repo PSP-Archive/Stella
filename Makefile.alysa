@@ -1,0 +1,406 @@
+COMMON = src/common
+CORE = src/emucore
+OPTIONS = 
+SRC = src
+
+TARGET = Stella
+
+OBJS = \
+	src/common/Cheat.o \
+	src/common/CheetahCheat.o \
+	src/common/mainSDL.o \
+	src/common/SoundNull.o \
+	src/common/SoundSDL.o \
+	src/common/FrameBufferSoft.o \
+	src/common/FrameBufferGL.o \
+	src/common/Snapshot.o \
+	src/emucore/Booster.o \
+	src/emucore/Cart2K.o \
+	src/emucore/Cart3F.o \
+	src/emucore/Cart3E.o \
+	src/emucore/Cart4K.o \
+	src/emucore/CartAR.o \
+	src/emucore/CartCV.o \
+	src/emucore/Cart.o \
+	src/emucore/CartDPC.o \
+	src/emucore/CartE0.o \
+	src/emucore/CartE7.o \
+	src/emucore/CartF4.o \
+	src/emucore/CartF4SC.o \
+	src/emucore/CartF6.o \
+	src/emucore/CartF6SC.o \
+	src/emucore/CartF8.o \
+	src/emucore/CartF8SC.o \
+	src/emucore/CartFASC.o \
+	src/emucore/CartFE.o \
+	src/emucore/CartMB.o \
+	src/emucore/CartMC.o \
+	src/emucore/CartUA.o \
+	src/emucore/Console.o \
+	src/emucore/Control.o \
+	src/emucore/Deserializer.o \
+	src/emucore/Driving.o \
+	src/emucore/Event.o \
+	src/emucore/EventHandler.o \
+	src/emucore/FrameBuffer.o \
+	src/emucore/FSNode.o \
+	src/emucore/Joystick.o \
+	src/emucore/Keyboard.o \
+	src/emucore/M6532.o \
+	src/emucore/MD5.o \
+	src/emucore/MediaSrc.o \
+	src/emucore/OSystem.o \
+	src/emucore/Paddles.o \
+	src/emucore/Props.o \
+	src/emucore/PropsSet.o \
+	src/emucore/Random.o \
+	src/emucore/Serializer.o \
+	src/emucore/Settings.o \
+	src/emucore/Switches.o \
+	src/emucore/TIA.o \
+	src/emucore/TIASnd.o \
+	src/emucore/unzip.o \
+	src/gui/AboutDialog.o \
+	src/gui/AudioDialog.o \
+	src/gui/BrowserDialog.o \
+	src/gui/CheatCodeDialog.o \
+	src/gui/CommandDialog.o \
+	src/gui/CommandMenu.o \
+	src/gui/DialogContainer.o \
+	src/gui/Dialog.o \
+	src/gui/EditableWidget.o \
+	src/gui/EditTextWidget.o \
+	src/gui/EventMappingDialog.o \
+	src/gui/Font.o \
+	src/gui/GameInfoDialog.o \
+	src/gui/GameList.o \
+	src/gui/HelpDialog.o \
+	src/gui/InputTextDialog.o \
+	src/gui/Launcher.o \
+	src/gui/LauncherDialog.o \
+	src/gui/LauncherOptionsDialog.o \
+	src/gui/ListWidget.o \
+	src/gui/Menu.o \
+	src/gui/OptionsDialog.o \
+	src/gui/PopUpWidget.o \
+	src/gui/ProgressDialog.o \
+	src/gui/ScrollBarWidget.o \
+	src/gui/CheckListWidget.o \
+	src/gui/StringListWidget.o \
+	src/gui/TabWidget.o \
+	src/gui/VideoDialog.o \
+	src/gui/Widget.o \
+	src/psp/FSNodePSP.o \
+	src/psp/OSystemPSP.o \
+	src/psp/SettingsPSP.o \
+	src/psp/SDL_psp_main.o \
+	src/emucore/m6502/src/Device.o \
+	src/emucore/m6502/src/M6502.o \
+	src/emucore/m6502/src/M6502Hi.o \
+	src/emucore/m6502/src/NullDev.o \
+	src/emucore/m6502/src/System.o
+
+
+PSPSDK = $(shell psp-config --pspsdk-path)
+PSPBIN = $(PSPSDK)/../bin
+
+INCLUDES  = -I. -I$(CORE) -I$(CORE)/m6502/src -I$(SRC)/gui \
+            -I$(CORE)/m6502/src/bspf/src -I$(COMMON) -I$(SRC)/unix -I$(SRC)/win32 -I$(SRC)/psp
+INCDIR =
+CFLAGS =  -DJOYSTICK_SUPPORT -DSNAPSHOT_SUPPORT -DSOUND_SUPPORT -DBSPF_PSP -DPSP -DHAVE_GETTIMEOFDAY -G0 -O2 `$(PSPBIN)/sdl-config --cflags`
+CXXFLAGS = $(CFLAGS) -fno-rtti $(INCLUDES)
+ASFLAGS = $(CFLAGS)
+
+LIBDIR =
+LDFLAGS =
+LIBS= -L/usr/local/pspdev/psp/lib -lSDL -lm -L/usr/local/pspdev/psp/sdk/lib -lpspdebug -lpspgu -lpspctrl -lpspge -lpspdisplay -lpsphprm -lpspsdk -lpspaudio -lc -lpspuser -lpspkernel -lpsppower -lpng -lz -lm -lg -lstdc++
+
+EXTRA_TARGETS = EBOOT.PBP
+PSP_EBOOT_TITLE = Stella v2.0
+PSP_EBOOT_SFO = PARAM.SFO
+PSP_EBOOT_ICON = src/psp/data/ICON0.PNG
+PSP_EBOOT_PIC1 = src/psp/data/PIC1.PNG
+
+include $(PSPSDK)/lib/build.mak
+
+src/common/Cheat.o: src/common/Cheat.cxx src/common/Cheat.hxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/common/CheetahCheat.o: src/common/CheetahCheat.cxx src/common/CheetahCheat.hxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/common/mainSDL.o: src/common/mainSDL.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/common/SoundNull.o: src/common/SoundNull.cxx src/common/SoundNull.hxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/common/SoundSDL.o: src/common/SoundSDL.cxx src/common/SoundSDL.hxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/common/FrameBufferSoft.o: src/common/FrameBufferSoft.cxx src/common/FrameBufferSoft.hxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/common/FrameBufferGL.o: src/common/FrameBufferGL.cxx src/common/FrameBufferGL.hxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/common/Snapshot.o: src/common/Snapshot.cxx src/common/Snapshot.hxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Booster.o: src/emucore/Booster.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Cart2K.o: src/emucore/Cart2K.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Cart3F.o: src/emucore/Cart3F.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Cart3E.o: src/emucore/Cart3E.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Cart4K.o: src/emucore/Cart4K.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartAR.o: src/emucore/CartAR.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartCV.o: src/emucore/CartCV.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Cart.o: src/emucore/Cart.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartDPC.o: src/emucore/CartDPC.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartE0.o: src/emucore/CartE0.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartE7.o: src/emucore/CartE7.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartF4.o: src/emucore/CartF4.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartF4SC.o: src/emucore/CartF4SC.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartF6.o: src/emucore/CartF6.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartF6SC.o: src/emucore/CartF6SC.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartF8.o: src/emucore/CartF8.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartF8SC.o: src/emucore/CartF8SC.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartFASC.o: src/emucore/CartFASC.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartFE.o: src/emucore/CartFE.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartMB.o: src/emucore/CartMB.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartMC.o: src/emucore/CartMC.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/CartUA.o: src/emucore/CartUA.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Console.o: src/emucore/Console.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Control.o: src/emucore/Control.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Deserializer.o: src/emucore/Deserializer.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Driving.o: src/emucore/Driving.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Event.o: src/emucore/Event.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/EventHandler.o: src/emucore/EventHandler.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/FrameBuffer.o: src/emucore/FrameBuffer.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/FSNode.o: src/emucore/FSNode.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Joystick.o: src/emucore/Joystick.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Keyboard.o: src/emucore/Keyboard.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/M6532.o: src/emucore/M6532.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/MD5.o: src/emucore/MD5.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/MediaSrc.o: src/emucore/MediaSrc.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/OSystem.o: src/emucore/OSystem.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Paddles.o: src/emucore/Paddles.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Props.o: src/emucore/Props.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/PropsSet.o: src/emucore/PropsSet.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Random.o: src/emucore/Random.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Serializer.o: src/emucore/Serializer.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Settings.o: src/emucore/Settings.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/Switches.o: src/emucore/Switches.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/TIA.o: src/emucore/TIA.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/TIASnd.o: src/emucore/TIASnd.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/unzip.o: src/emucore/unzip.c
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.c
+
+src/gui/AboutDialog.o: src/gui/AboutDialog.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/AudioDialog.o: src/gui/AudioDialog.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/BrowserDialog.o: src/gui/BrowserDialog.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/CheatCodeDialog.o: src/gui/CheatCodeDialog.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/CommandDialog.o: src/gui/CommandDialog.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/CommandMenu.o: src/gui/CommandMenu.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/DialogContainer.o: src/gui/DialogContainer.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/Dialog.o: src/gui/Dialog.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/EditableWidget.o: src/gui/EditableWidget.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/EditTextWidget.o: src/gui/EditTextWidget.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/EventMappingDialog.o: src/gui/EventMappingDialog.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/Font.o: src/gui/Font.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/GameInfoDialog.o: src/gui/GameInfoDialog.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/GameList.o: src/gui/GameList.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/HelpDialog.o: src/gui/HelpDialog.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/InputTextDialog.o: src/gui/InputTextDialog.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/Launcher.o: src/gui/Launcher.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/LauncherDialog.o: src/gui/LauncherDialog.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/LauncherOptionsDialog.o: src/gui/LauncherOptionsDialog.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/ListWidget.o: src/gui/ListWidget.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/Menu.o: src/gui/Menu.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/OptionsDialog.o: src/gui/OptionsDialog.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/PopUpWidget.o: src/gui/PopUpWidget.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/ProgressDialog.o: src/gui/ProgressDialog.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/ScrollBarWidget.o: src/gui/ScrollBarWidget.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/CheckListWidget.o: src/gui/CheckListWidget.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/StringListWidget.o: src/gui/StringListWidget.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/TabWidget.o: src/gui/TabWidget.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/VideoDialog.o: src/gui/VideoDialog.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/gui/Widget.o: src/gui/Widget.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/psp/FSNodePSP.o: src/psp/FSNodePSP.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/psp/OSystemPSP.o: src/psp/OSystemPSP.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/psp/SettingsPSP.o: src/psp/SettingsPSP.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/psp/SDL_psp_main.o: src/psp/SDL_psp_main.c
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.c
+
+src/emucore/m6502/src/Device.o: src/emucore/m6502/src/Device.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/m6502/src/M6502.o: src/emucore/m6502/src/M6502.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/m6502/src/M6502Hi.o: src/emucore/m6502/src/M6502Hi.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/m6502/src/NullDev.o: src/emucore/m6502/src/NullDev.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+
+src/emucore/m6502/src/System.o: src/emucore/m6502/src/System.cxx
+	$(CXX) -c $(CXXFLAGS) -o $*.o $*.cxx
+

@@ -20,8 +20,8 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\yacc;..\debugger;..\gui;..\emucore\m6502\src\bspf\src;..\emucore\m6502\src;..\emucore;..\common;..\win32;..\debugger\gui"
-				PreprocessorDefinitions="BSPF_WIN32;WIN32;_DEBUG;JOYSTICK_SUPPORT;DEVELOPER_SUPPORT;SNAPSHOT_SUPPORT;DISPLAY_OPENGL;TEXTURES_ARE_LOST;SOUND_SUPPORT"
+				AdditionalIncludeDirectories="..\yacc;..\debugger;..\gui;..\emucore\m6502\src\bspf\src;..\emucore\m6502\src;..\emucore;..\common;..\win32;..\debugger\gui;..\cheat"
+				PreprocessorDefinitions="BSPF_WIN32;WIN32;_DEBUG;JOYSTICK_SUPPORT;DEVELOPER_SUPPORT;DISPLAY_OPENGL;TEXTURES_ARE_LOST;SNAPSHOT_SUPPORT;SOUND_SUPPORT;CHEATCODE_SUPPORT"
 				MinimalRebuild="TRUE"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="2"
@@ -37,7 +37,7 @@
 SDLmain.lib
 libpng.lib
 opengl32.lib"
-				AdditionalDependencies="sdl.lib sdlmain.lib libpng.lib opengl32.lib"
+				AdditionalDependencies="sdl.lib sdlmain.lib libpng.lib opengl32.lib zdll.lib"
 				OutputFile="$(OutDir)/Stella.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="TRUE"
@@ -73,8 +73,8 @@ opengl32.lib"
 			CharacterSet="2">
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalIncludeDirectories="..\yacc;..\emucore\m6502\src\bspf\src;..\emucore\m6502\src;..\emucore;..\common;..\gui;..\debugger\gui;..\debugger;..\win32"
-				PreprocessorDefinitions="BSPF_WIN32;WIN32;NDEBUG;JOYSTICK_SUPPORT;DEVELOPER_SUPPORT;SNAPSHOT_SUPPORT;DISPLAY_OPENGL;TEXTURES_ARE_LOST;SOUND_SUPPORT"
+				AdditionalIncludeDirectories="..\yacc;..\emucore\m6502\src\bspf\src;..\emucore\m6502\src;..\emucore;..\common;..\gui;..\debugger\gui;..\debugger;..\win32;..\cheat"
+				PreprocessorDefinitions="BSPF_WIN32;WIN32;NDEBUG;JOYSTICK_SUPPORT;DEVELOPER_SUPPORT;SNAPSHOT_SUPPORT;DISPLAY_OPENGL;TEXTURES_ARE_LOST;SOUND_SUPPORT;CHEATCODE_SUPPORT"
 				RuntimeLibrary="2"
 				UsePrecompiledHeader="0"
 				WarningLevel="2"
@@ -129,6 +129,12 @@ opengl32.lib"
 			</File>
 			<File
 				RelativePath="..\gui\AudioDialog.cxx">
+			</File>
+			<File
+				RelativePath="..\debugger\gui\AudioWidget.cxx">
+			</File>
+			<File
+				RelativePath="..\cheat\BankRomCheat.cxx">
 			</File>
 			<File
 				RelativePath="..\debugger\BinAndExpression.cxx">
@@ -218,16 +224,16 @@ opengl32.lib"
 				RelativePath="..\emucore\CartUA.cxx">
 			</File>
 			<File
-				RelativePath="..\common\Cheat.cxx">
+				RelativePath="..\cheat\CheatCodeDialog.cxx">
 			</File>
 			<File
-				RelativePath="..\gui\CheatCodeDialog.cxx">
+				RelativePath="..\cheat\CheatManager.cxx">
 			</File>
 			<File
 				RelativePath="..\gui\CheckListWidget.cxx">
 			</File>
 			<File
-				RelativePath="..\common\CheetahCheat.cxx">
+				RelativePath="..\cheat\CheetahCheat.cxx">
 			</File>
 			<File
 				RelativePath="..\debugger\gui\ColorWidget.cxx">
@@ -314,7 +320,10 @@ opengl32.lib"
 				RelativePath="..\emucore\EventHandler.cxx">
 			</File>
 			<File
-				RelativePath="..\gui\EventMappingDialog.cxx">
+				RelativePath="..\gui\EventMappingWidget.cxx">
+			</File>
+			<File
+				RelativePath="..\emucore\EventStreamer.cxx">
 			</File>
 			<File
 				RelativePath="..\debugger\Expression.cxx">
@@ -357,6 +366,9 @@ opengl32.lib"
 			</File>
 			<File
 				RelativePath="..\debugger\HiByteExpression.cxx">
+			</File>
+			<File
+				RelativePath="..\gui\InputDialog.cxx">
 			</File>
 			<File
 				RelativePath="..\gui\InputTextDialog.cxx">
@@ -413,6 +425,9 @@ opengl32.lib"
 				RelativePath="..\emucore\MD5.cxx">
 			</File>
 			<File
+				RelativePath="..\emucore\MediaFactory.cxx">
+			</File>
+			<File
 				RelativePath="..\emucore\MediaSrc.cxx">
 			</File>
 			<File
@@ -465,6 +480,9 @@ opengl32.lib"
 			</File>
 			<File
 				RelativePath="..\emucore\PropsSet.cxx">
+			</File>
+			<File
+				RelativePath="..\cheat\RamCheat.cxx">
 			</File>
 			<File
 				RelativePath="..\debugger\RamDebug.cxx">
@@ -536,7 +554,7 @@ opengl32.lib"
 				RelativePath="..\debugger\gui\TiaOutputWidget.cxx">
 			</File>
 			<File
-				RelativePath="..\emucore\TIASound.c">
+				RelativePath="..\emucore\TIASnd.cxx">
 			</File>
 			<File
 				RelativePath="..\debugger\gui\TiaWidget.cxx">
@@ -580,10 +598,16 @@ opengl32.lib"
 				RelativePath="..\gui\AboutDialog.hxx">
 			</File>
 			<File
-				RelativePath="..\gui\Array.hxx">
+				RelativePath="..\common\Array.hxx">
 			</File>
 			<File
 				RelativePath="..\gui\AudioDialog.hxx">
+			</File>
+			<File
+				RelativePath="..\debugger\gui\AudioWidget.hxx">
+			</File>
+			<File
+				RelativePath="..\cheat\BankRomCheat.hxx">
 			</File>
 			<File
 				RelativePath="..\debugger\BinAndExpression.hxx">
@@ -676,16 +700,19 @@ opengl32.lib"
 				RelativePath="..\emucore\CartUA.hxx">
 			</File>
 			<File
-				RelativePath="..\common\Cheat.hxx">
+				RelativePath="..\cheat\Cheat.hxx">
 			</File>
 			<File
-				RelativePath="..\gui\CheatCodeDialog.hxx">
+				RelativePath="..\cheat\CheatCodeDialog.hxx">
+			</File>
+			<File
+				RelativePath="..\cheat\CheatManager.hxx">
 			</File>
 			<File
 				RelativePath="..\gui\CheckListWidget.hxx">
 			</File>
 			<File
-				RelativePath="..\common\CheetahCheat.hxx">
+				RelativePath="..\cheat\CheetahCheat.hxx">
 			</File>
 			<File
 				RelativePath="..\debugger\gui\ColorWidget.hxx">
@@ -781,7 +808,10 @@ opengl32.lib"
 				RelativePath="..\emucore\EventHandler.hxx">
 			</File>
 			<File
-				RelativePath="..\gui\EventMappingDialog.hxx">
+				RelativePath="..\gui\EventMappingWidget.hxx">
+			</File>
+			<File
+				RelativePath="..\emucore\EventStreamer.hxx">
 			</File>
 			<File
 				RelativePath="..\debugger\Expression.hxx">
@@ -830,6 +860,9 @@ opengl32.lib"
 			</File>
 			<File
 				RelativePath="..\debugger\HiByteExpression.hxx">
+			</File>
+			<File
+				RelativePath="..\gui\InputDialog.hxx">
 			</File>
 			<File
 				RelativePath="..\gui\InputTextDialog.hxx">
@@ -881,6 +914,9 @@ opengl32.lib"
 			</File>
 			<File
 				RelativePath="..\emucore\MD5.hxx">
+			</File>
+			<File
+				RelativePath="..\emucore\MediaFactory.hxx">
 			</File>
 			<File
 				RelativePath="..\emucore\MediaSrc.hxx">
@@ -935,6 +971,9 @@ opengl32.lib"
 			</File>
 			<File
 				RelativePath="..\emucore\PropsSet.hxx">
+			</File>
+			<File
+				RelativePath="..\cheat\RamCheat.hxx">
 			</File>
 			<File
 				RelativePath="..\debugger\RamDebug.hxx">
@@ -1021,7 +1060,7 @@ opengl32.lib"
 				RelativePath="..\debugger\gui\TiaOutputWidget.hxx">
 			</File>
 			<File
-				RelativePath="..\emucore\TIASound.h">
+				RelativePath="..\emucore\TIASnd.hxx">
 			</File>
 			<File
 				RelativePath="..\debugger\TiaWidget.hxx">
@@ -1064,6 +1103,12 @@ opengl32.lib"
 			Name="Resource Files"
 			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx"
 			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}">
+			<File
+				RelativePath=".\stella.ico">
+			</File>
+			<File
+				RelativePath=".\stella.rc">
+			</File>
 		</Filter>
 	</Files>
 	<Globals>

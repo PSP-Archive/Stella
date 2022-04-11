@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Paddles.hxx,v 1.2 2005/06/16 01:11:28 stephena Exp $
+// $Id: Paddles.hxx,v 1.4 2005/11/12 22:59:20 stephena Exp $
 //============================================================================
 
 #ifndef PADDLES_HXX
@@ -26,7 +26,7 @@
   The standard Atari 2600 pair of paddle controllers.
 
   @author  Bradford W. Mott
-  @version $Id: Paddles.hxx,v 1.2 2005/06/16 01:11:28 stephena Exp $
+  @version $Id: Paddles.hxx,v 1.4 2005/11/12 22:59:20 stephena Exp $
 */
 class Paddles : public Controller
 {
@@ -72,5 +72,5 @@ class Paddles : public Controller
     */
     virtual void write(DigitalPin pin, bool value);
 };
-#endif
 
+#endif

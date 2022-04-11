@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: GameInfoDialog.hxx,v 1.7 2005/07/05 15:25:44 stephena Exp $
+// $Id: GameInfoDialog.hxx,v 1.12 2005/10/01 01:42:36 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
@@ -22,51 +22,75 @@
 #ifndef GAME_INFO_DIALOG_HXX
 #define GAME_INFO_DIALOG_HXX
 
-class DialogContainer;
-class CommandSender;
-class ButtonWidget;
+class OSystem;
+class GuiObject;
+class EditTextWidget;
+class PopUpWidget;
 class StaticTextWidget;
+class TabWidget;
+class Properties;
 
-#define ADD_BIND(k,d) do { key[i] = k; dsc[i] = d; i++; } while(0)
-#define ADD_TEXT(d) ADD_BIND("",d)
-#define ADD_LINE ADD_BIND("","")
-
-#define LINES_PER_PAGE 10
-
-#include "OSystem.hxx"
+#include "Array.hxx"
 #include "Dialog.hxx"
-#include "Props.hxx"
-#include "bspf.hxx"
+#include "Command.hxx"
 
-class GameInfoDialog : public Dialog
+// Structure used for cartridge and controller types
+struct PropType {
+  string name;
+  string comparitor;
+};
+
+class GameInfoDialog : public Dialog, public CommandSender
 {
   public:
-    GameInfoDialog(OSystem* osystem, DialogContainer* parent,
+    GameInfoDialog(OSystem* osystem, DialogContainer* parent, GuiObject* boss,
                    int x, int y, int w, int h);
     ~GameInfoDialog();
 
     void setGameProfile(Properties& props) { myGameProperties = &props; }
 
-  protected:
-    ButtonWidget* myNextButton;
-    ButtonWidget* myPrevButton;
-
-    StaticTextWidget* myTitle;
-    StaticTextWidget* myKey[LINES_PER_PAGE];
-    StaticTextWidget* myDesc[LINES_PER_PAGE];
-
-    uInt8 myPage;
-    uInt8 myNumPages;
+    void loadConfig();
+    void saveConfig();
+    void handleCommand(CommandSender* sender, int cmd, int data, int id);
 
   private:
-    virtual void handleCommand(CommandSender* sender, int cmd, int data, int id);
-    virtual void updateStrings(uInt8 page, uInt8 lines,
-                               string& title, string*& key, string* &dsc);
-	void displayInfo();
-    void loadConfig() { displayInfo(); }
+    TabWidget* myTab;
 
-  private:
+    // Cartridge properties
+    EditTextWidget*   myName;
+    StaticTextWidget* myMD5;
+    EditTextWidget*   myManufacturer;
+    EditTextWidget*   myModelNo;
+    EditTextWidget*   myRarity;
+    EditTextWidget*   myNote;
+    PopUpWidget*      mySound;
+    PopUpWidget*      myType;
+
+    // Console properties
+    PopUpWidget* myLeftDiff;
+    PopUpWidget* myRightDiff;
+    PopUpWidget* myTVType;
+
+    // Controller properties
+    PopUpWidget* myLeftController;
+    PopUpWidget* myRightController;
+
+    // Display properties
+    PopUpWidget*    myFormat;
+    EditTextWidget* myXStart;
+    EditTextWidget* myWidth;
+    EditTextWidget* myYStart;
+    EditTextWidget* myHeight;
+    PopUpWidget*    myHmoveBlanks;
+
+    /** Game properties for currently loaded ROM */
     Properties* myGameProperties;
+
+    /** Holds static strings for Cartridge type */
+    static const PropType ourCartridgeList[21];
+
+    /** Holds static strings for Controller type */
+    static const PropType ourControllerList[5];
 };
 
 #endif

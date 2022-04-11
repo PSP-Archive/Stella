@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Widget.hxx,v 1.36 2005/08/31 19:15:10 stephena Exp $
+// $Id: Widget.hxx,v 1.44 2006/01/04 01:24:17 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
@@ -31,6 +31,7 @@ class Dialog;
 #include "GuiObject.hxx"
 #include "GuiUtils.hxx"
 #include "Array.hxx"
+#include "Rect.hxx"
 #include "bspf.hxx"
 
 enum {
@@ -43,7 +44,9 @@ enum {
   WIDGET_TRACK_MOUSE  = 1 << 6,
   WIDGET_RETAIN_FOCUS = 1 << 7,
   WIDGET_NODRAW_FOCUS = 1 << 8,
-  WIDGET_WANTS_TAB    = 1 << 9
+  WIDGET_STICKY_FOCUS = 1 << 9,
+  WIDGET_WANTS_TAB    = 1 << 10,
+  WIDGET_WANTS_EVENTS = 1 << 11
 };
 
 enum {
@@ -71,7 +74,7 @@ enum {
   This is the base class for all widgets.
   
   @author  Stephen Anthony
-  @version $Id: Widget.hxx,v 1.36 2005/08/31 19:15:10 stephena Exp $
+  @version $Id: Widget.hxx,v 1.44 2006/01/04 01:24:17 stephena Exp $
 */
 class Widget : public GuiObject
 {
@@ -94,13 +97,15 @@ class Widget : public GuiObject
     virtual bool handleKeyUp(int ascii, int keycode, int modifiers)   { return false; }
     virtual void handleJoyDown(int stick, int button) {}
     virtual void handleJoyUp(int stick, int button) {}
+    virtual void handleJoyAxis(int stick, int axis, int value) {}
 
     void draw();
     void receivedFocus();
     void lostFocus();
     void addFocusWidget(Widget* w) { _focusList.push_back(w); }
 
-    virtual bool wantsFocus() { return false; };
+    virtual GUI::Rect getRect() const;
+    virtual bool wantsFocus()  { return false; }
 
     /** Set/clear WIDGET_ENABLED flag and immediately redraw */
     void setEnabled(bool e);
@@ -111,6 +116,8 @@ class Widget : public GuiObject
 
     bool isEnabled() const      { return _flags & WIDGET_ENABLED;      }
     bool isVisible() const      { return !(_flags & WIDGET_INVISIBLE); }
+    bool isSticky() const       { return _flags & WIDGET_STICKY_FOCUS; }
+    bool wantsEvents() const    { return _flags & WIDGET_WANTS_EVENTS; }
 
     void setID(int id)  { _id = id;   }
     int  getID()        { return _id; }
@@ -172,12 +179,14 @@ class StaticTextWidget : public Widget
     void setLabel(const string& label);
     void setAlign(TextAlignment align)  { _align = align; }
     const string& getLabel() const      { return _label; }
+    void setEditable(bool editable);
 
   protected:
     void drawWidget(bool hilite);
 
   protected:
     string        _label;
+    bool          _editable;
     TextAlignment _align;
 };
 
@@ -196,12 +205,18 @@ class ButtonWidget : public StaticTextWidget, public CommandSender
     void handleMouseUp(int x, int y, int button, int clickCount);
     void handleMouseEntered(int button);
     void handleMouseLeft(int button);
+    bool handleKeyDown(int ascii, int keycode, int modifiers);
+    void handleJoyDown(int stick, int button);
+
+    bool wantsFocus();
+    void setEditable(bool editable);
 
   protected:
     void drawWidget(bool hilite);
 
   protected:
     int    _cmd;
+    bool   _editable;
     uInt8  _hotkey;
 };
 

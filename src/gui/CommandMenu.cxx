@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: CommandMenu.cxx,v 1.1 2005/08/29 18:36:42 stephena Exp $
+// $Id: CommandMenu.cxx,v 1.3 2005/12/24 22:50:52 stephena Exp $
 //============================================================================
 
 #include "Dialog.hxx"
@@ -22,7 +22,7 @@
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 CommandMenu::CommandMenu(OSystem* osystem)
-    : DialogContainer(osystem)
+  : DialogContainer(osystem)
 {
 }
 

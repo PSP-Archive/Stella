@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: AudioDialog.cxx,v 1.13 2005/08/16 18:34:12 stephena Exp $
+// $Id: AudioDialog.cxx,v 1.17 2005/09/23 23:35:02 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
@@ -70,18 +70,15 @@ AudioDialog::AudioDialog(OSystem* osystem, DialogContainer* parent,
   myFragsizePopup->appendEntry("4096", 5);
   yoff += kAudioRowHeight + 4;
 
+  // Stereo sound
+  mySoundTypeCheckbox = new CheckboxWidget(this, font, xoff+28, yoff,
+                                           "Stereo mode", 0);
+  yoff += kAudioRowHeight + 4;
+
   // Enable sound
-  new StaticTextWidget(this, xoff+8, yoff+3, 20, kLineHeight, "", kTextAlignLeft);
   mySoundEnableCheckbox = new CheckboxWidget(this, font, xoff+28, yoff,
                                              "Enable sound", kSoundEnableChanged);
   yoff += kAudioRowHeight + 12;
-
-  // Add a short message about options that need a restart
-//  new StaticTextWidget(this, xoff+30, yoff, 170, kLineHeight,
-//                       "* Note that these options take effect", kTextAlignLeft);
-//  yoff += kAudioRowHeight;
-//  new StaticTextWidget(this, xoff+30, yoff, 170, kLineHeight,
-//                       "the next time you restart Stella.", kTextAlignLeft);
 
   // Add Defaults, OK and Cancel buttons
   addButton( 10, _h - 24, "Defaults", kDefaultsCmd, 0);
@@ -118,6 +115,10 @@ void AudioDialog::loadConfig()
   else if(i == 4096) i = 5;
   myFragsizePopup->setSelectedTag(i);
 
+  // Stereo mode
+  i = instance()->settings().getInt("channels");
+  mySoundTypeCheckbox->setState(i == 2);
+
   // Enable sound
   b = instance()->settings().getBool("sound");
   mySoundEnableCheckbox->setState(b);
@@ -146,6 +147,14 @@ void AudioDialog::saveConfig()
     restart = true;
   }
 
+  // Enable/disable stereo sound (requires a restart to take effect)
+  b = mySoundTypeCheckbox->getState();
+  if((instance()->settings().getInt("channels") == 2) != b)
+  {
+    instance()->console().setChannels(b ? 2 : 1);
+    restart = true;
+  }
+
   // Enable/disable sound (requires a restart to take effect)
   b = mySoundEnableCheckbox->getState();
   if(instance()->settings().getBool("sound") != b)
@@ -158,7 +167,8 @@ void AudioDialog::saveConfig()
   // be a time-consuming operation
   if(restart)
   {
-    instance()->sound().initialize(true);
+    instance()->sound().close();
+    instance()->sound().initialize();
     instance()->sound().mute(true);
   }
 }
@@ -175,6 +185,7 @@ void AudioDialog::setDefaults()
   myFragsizePopup->setSelectedTag(2);
 #endif
 
+  mySoundTypeCheckbox->setState(false);
   mySoundEnableCheckbox->setState(true);
 
   // Make sure that mutually-exclusive items are not enabled at the same time
@@ -189,6 +200,7 @@ void AudioDialog::handleSoundEnableChange(bool active)
   myVolumeSlider->setEnabled(active);
   myVolumeLabel->setEnabled(active);
   myFragsizePopup->setEnabled(active);
+  mySoundTypeCheckbox->setEnabled(active);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

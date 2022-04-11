@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Menu.cxx,v 1.10 2005/06/16 00:55:59 stephena Exp $
+// $Id: Menu.cxx,v 1.12 2005/12/18 18:37:03 stephena Exp $
 //============================================================================
 
 #include "Dialog.hxx"

@@ -10,7 +10,7 @@
 	<br><br>
 	<center><h2><b>A multi-platform Atari 2600 VCS emulator</b></h2></center>
 
-	<center><h4><b>Release 2.0</b></h4></center>
+	<center><h4><b>Release 2.0.1</b></h4></center>
 	<br><br>
 
 	<center><h2><b>User's Guide</b></h2></center>
@@ -35,7 +35,7 @@
 
 	<br><br><br>
 
-	<center><b>February 1999 - (FIXME)February 2005</b></center>
+	<center><b>February 1999 - October 2005</b></center>
 	<center><b>The Stella Team</b></center>
 	<center><b><a href="http://stella.sourceforge.net">Stella Homepage</a></b></center>
 
@@ -214,69 +214,44 @@
     Sega Dreamcast, Unix, and Windows.
 	</p>
 
-	<h2><b>New in Release 2.0</b></h2>
+	<h2><b>New in Release 2.0.1</b></h2>
 
 	<ul>
-		<li>Added integrated GUI.  Stella is now a fully graphical application, and all
-			settings can be changed dynamically while the application is running.  That
-			means the commandline is no longer required (but support is still there
-			for those that want to use it).</li>
+		<li>Added 'dirtyrects' support, which speeds up rendering for some Windows
+			users.</li>
 
-		<li>Added ROM launcher.  You can now exit a game and start playing another one
-			from directly within Stella (you no longer have to quit Stella and
-			restart it).</li>
+		<li>Fixed bug where taking snapshots would fail if the snapshot directory
+			wasn't specified.</li>
 
-		<li>Because of the integrated GUI and ROM launcher, StellaX and KStella
-			(the Windows and Linux frontends) have been discontinued.  The OSX
-			port now uses the launcher as well.</li>
+		<li>Made ROM launcher case-insensitive, so upper and lowercase names are now
+			mixed in the correct order.</li>
 
-		<li>FIXME - add info about integrated debugger</li>
+		<li>Fixed ZIP ROM support to search the archive for ROMs ending with either
+			.bin or .a26 (case insensitive).</li>
 
-		<li>Further consolidation and integration of SDL.  This should lead to
-			faster operation and a more consistent look for all ports.</li>
+		<li>ROMs which don't have an associated properties entry are no longer named
+			'Untitled' in the Stella window or when taking snapshots.  The actual
+			ROM name is now used.</li>
 
-		<li>Added ZIP support.  Stella can now open ROM's compressed in zip
-			format.</li>
+		<li>Changed minimum height of debugger to be 27 lines in the prompt, or approx.
+			700 pixels high.  This should make using the debugger easier for users
+			with lower resolution monitors.  Related to this, the RomWidget now uses
+			all possible vertical space when changing the debugger height.</li>
 
-		<li>Added <b>Alt/Shift-Cmd z, x, c, v, b, n</b> keys to enable/disable the
-			P0, P1, M0, M1, BL, PL bits in the TIA, respectively.</li> 
+		<li>Fixed bug related to upgrading Stella and event mappings being incorrect.
+			Stella now detects this, and uses the default mappings.  So upgrading
+			to version 2.0.1 means your event mappings will be reset.</li>
 
-		<li>Added <b>Alt/Shift-Cmd .</b> key to disable all bits in the TIA.</li>
- 
-		<li>Added <b>Alt/Shift-Cmd /</b> key to enable all bits in the TIA.</li>
+		<li>Fixed bug in loading debugger symbol files generated on different
+			operating systems.</li>
 
-		<li>Added <b>Alt/Shift-Cmd g</b> key to switch dynamically switch between
-			software and OpenGL modes while Stella is running.</li>
+		<li>For the Windows port; added exe installer based on InnoSetup.</li>
 
-		<li>Added <b>Ctrl/Cmd r</b> key to reload the ROM currently being
-			emulated.</li>
+		<li>For the Windows port; compiled icon into Stella, so it now looks like
+			a real Win32 application.</li>
 
-		<li>Added <b>Alt/Shift-Cmd s</b> key to merge the current game properties
-			into the properties file.</li>
-
-		<li>Added <b>help</b> commandline argument.  Launching Stella from the
-			commandline with no options now starts Stella in ROM launcher mode,
-			instead of showing help (as in previous versions).</li>
-
-		<li>Added the following commandline arguments for developers:
-			<b>pro, type, ld, rd, tv, lc, rc, bc, format, xstart, ystart, width
-			height, cpu, hmove</b>.  Developers can consult the manual for
-			further details.</li>
-
-		<li>Removed <b>mergeprops</b> commandline argument, since there are now
-			dedicated keys to do either save or merge game properties.</li>
-
-		<li>Removed <b>grabmouse</b> and <b>hidecursor</b> commandline arguments.
-			Stella will	now automatically decide when to use these settings.
-			You can still use <b>Ctrl/Cmd g</b> to grab/ungrab the mouse.</li>
-
-		<li>Fixed framerate when switching between NTSC and PAL modes.  Stella
-			now uses the correct framerate based on the format of the ROM.</li>
-
-		<li>Fixed some 64-bit issues.  Stella now compiles and runs correctly
-			on AMD64 and PPC64 systems.</li>
-
-		<li>Updated the Stella manual with pictures of the new integrated GUI.</li>
+		<li>For the OSX port, reverted window resize key combos back to 'Cmd =' and
+			'Cmd -' to match the 1.4.2 release.</li>
 	</ul>
 
 	<p>
@@ -284,8 +259,8 @@
 
 	<ul>
 		<li>High speed emulation using optimized C++ code</li>
-		<li>Supports high quality sound emulation using Ron Fries' TIA Sound Emulation
-			library</li>
+		<li>Supports high quality sound emulation using code derived from Ron Fries'
+			TIA Sound Emulation library, including stereo sound support</li>
 		<li>Emulates the Atari 2600 Joystick Controllers using your computer's keyboard
 			or joysticks</li>
 		<li>Emulates the Atari 2600 Keyboard Controllers using your computer's keyboard</li>
@@ -349,7 +324,7 @@
 	<ul>
 		<li>Linux Kernel 2.4.x, Linux Kernel 2.6.x is highly recommended</li>
 		<li>GNU C++ compiler version 2.95 and the make utility are required for compiling
-			the Stella source code; GNU C++ compiler version 3.2.x or later is highly
+			the Stella source code; GNU C++ compiler version 3.2.x/4.x or later is highly
 			recommended</li>
 		<li>Pentium class machine required (Stella <b>may</b> compile on other
 			architectures, but it hasn't been extensively tested)</li>
@@ -364,12 +339,14 @@
 		<li>Mac OSX 10.1 or Above</li>
 		<li>500 MHz G4 PPC processor or above (Stella <b>may</b> work with a G3
 			processor, but this is still a work-in-progress)</li>
+		<li>OpenGL capable video card.  Software rendering mode is still available,
+			but as of OSX 10.4 is substandard compared to OpenGL.</li>
 	</ul>
 
 	<p>
 	<h2><b>Windows</b></h2>
 
-	<p>The Windows version of Stella is designed to work on Windows 95/98/ME/2000/XP with
+	<p>The Windows version of Stella is designed to work on Windows 98/ME/2000/XP with
 	the following:</p>
 
 	<ul>
@@ -402,15 +379,14 @@
 		<ol>
 			<li>Extract files from the distribution:
 				<pre>   tar zxvf stella-release-src.tar.gz</pre></li>
-			<li>Change directories to the stella-<i>release</i>/src/build directory</li>
-			<li>Edit the <b>makefile</b> to meet your needs</li>
+			<li>Change directories to the stella-<i>release</i> directory</li>
+
+			<li>Configure the build with the following command:
+				<pre>   ./configure (--help for list of options)</pre></li>
 			<li>Build the executable with the following command:
-				<pre>   make linux (or make linux-gl)</pre></li>
-			<li>Copy the executable to a directory that's in your path:
-				<pre>   cp stella /usr/local/bin</pre></li>
-			<li>Copy the supplied stella.pro properties file to the system-wide location:
-				<pre>   cp stella.pro /etc</pre> or to your home directory:
-				<pre>   mkdir ~/.stella<br>   cp stella.pro ~/.stella</pre></li>
+				<pre>   make</pre></li>
+			<li>Install the executable with the following command:
+				<pre>   make install</pre></li>
 		</ol>
 		<li><b>Source RPM</b> (stella-<i>release</i>-1.src.rpm)</li>
 		<ol>
@@ -430,7 +406,7 @@
 	<h2><b>Macintosh</b></h2>
 
 	<p>To install the Mac binary, simply download the DMG disk
-	image.  Mount the disk image, then copy the StellaOSXxxx folder to
+	image.  Mount the disk image, then copy the StellaOSX<i>release</i> folder to
 	your hard drive.<br>
 	</p>
 
@@ -442,19 +418,11 @@
 			<li>Extract files from the distribution using <b>Winzip</b>,
 				<b>Total Commander</b>, or some other archiving program that supports
 				gzipped tar files</li>
-			<li>If compiling the Stella executable using MinGW:</li>
-			<ul>
-				<li>Change directories to the stella-<i>release</i>/src/build
-					directory</li>
-				<li>Edit the <b>makefile</b> to meet your needs</li>
-				<li>Build the executable with the following command:
-					<pre>   make win32 (or make win32-gl)</pre></li>
-				<li>Copy the <b>Stella</b> (commandline executable) and <b>stella.pro</b>
-					files to some directory</li>
-			</ul>
+			<li>If compiling the Stella executable using MinGW, use the same commands
+				as specified under <i>Linux/UNIX - Compressed tarball</i></li>
 			<li>If compiling using Visual C++ 7:</li>
 			<ul>
-				<li>Open the <b>stella-<i>release</i>/src/win32/Stella_Emulator.sln</b>
+				<li>Open the <b>stella-<i>release</i>/src/win32/Stella.sln</b>
 					file using Visual C++ 7</li>
 				<li>Build the 'Stella' solution</li>
 				<li>Copy the <b>Stella.exe</b> and <b>stella.pro</b> files
@@ -465,6 +433,10 @@
 		<ol>
 			<li>Unzip the binary ZIP file using <b>Winzip</b> or <b>Total Commander</b>
 				and copy that directory somewhere</li>
+		</ol>
+		<li><b>Binary EXE installer</b> (stella-<i>release</i>-win32.exe)</li>
+		<ol>
+			<li>Double-click on the installer on follow the onscreen instructions</li>
 		</ol>
 	</ul>
 
@@ -562,8 +534,8 @@
 	<img src="graphics/rom_browser.png"></p>
 
 	<p>Once a ROM directory has been selected, clicking 'Reload' will update the
-	ROM listing.  You can start emulation by selecting a ROM and pressing 'Enter',
-	clicking 'Play' or double-clicking a ROM.</p>
+	ROM listing.  You can start emulation by selecting a ROM and pressing 'Enter'
+	or clicking 'Play', or double-clicking a ROM.</p>
 
 	<p>
 	<h2><b>Command Line</b></h2>
@@ -587,12 +559,6 @@
 		<tr>
 			<td><pre>-video &lt;soft|gl&gt;</pre></td>
 			<td>Use SDL software or OpenGL rendering mode.</td>
-		</tr>
-
-		<tr>
-			<td><pre>-video_driver &lt;windib|directx&gt;</pre></td>
-			<td>Use the specified video driver.  Windows works best with 'windib'.
-				Currently, only Windows makes use of this argument.</td>
 		</tr>
 
 		<tr>
@@ -628,6 +594,11 @@
 		</tr>
 
 		<tr>
+			<td><pre>-center &lt;0|1&gt;</pre></td>
+			<td>Centers game window (if possible).</td>
+		</tr>
+
+		<tr>
 			<td><pre>-grabmouse &lt;0|1&gt;</pre></td>
 			<td>Keeps the mouse in the game window.</td>
 		</tr>
@@ -645,8 +616,13 @@
 		</tr>
 
 		<tr>
-			<td><pre>-sound &lt;0|1&gt;</pre></td>
-			<td>Disable or enable sound.</td>
+			<td><pre>-sound &lt;1|0&gt;</pre></td>
+			<td>Enable or disable sound generation.</td>
+		</tr>
+
+		<tr>
+			<td><pre>-channels &lt;1|2&gt;</pre></td>
+			<td>Enable mono or stereo sound.</td>
 		</tr>
 
 		<tr>
@@ -666,14 +642,13 @@
 		</tr>
 
 		<tr>
-			<td><pre>-showinfo &lt;0|1&gt;</pre></td>
-			<td>Shows some game info while Stella is running.</td>
+			<td><pre>-joymouse &lt;0|1&gt;</pre></td>
+			<td>Indicates whether the joystick emulates the mouse in GUI mode (defaults to off).</td>
 		</tr>
 
 		<tr>
-			<td><pre>-mergeprops &lt;0|1&gt;</pre></td>
-			<td>Save the current properties to a separate file in the users' home directory,
-				or merge them into the users' stella.pro file.</td>
+			<td><pre>-showinfo &lt;0|1&gt;</pre></td>
+			<td>Shows some game info while Stella is running.</td>
 		</tr>
 
 		<tr>
@@ -724,6 +699,31 @@
 		</tr>
 
 		<tr>
+			<td><pre>-debugheight &lt;number&gt;</pre></td>
+			<td>Set height of debugger in lines of text (currently not 100% working)</td>
+		</tr>
+
+		<tr>
+			<td><pre>-debug</pre></td>
+			<td>Immediately jump to debugger mode when starting Stella.</td>
+		</tr>
+
+		<tr>
+			<td><pre>-holdreset</pre></td>
+			<td>Start the emulator with the Game Reset switch held down.</td>
+		</tr>
+
+		<tr>
+			<td><pre>-holdselect</pre></td>
+			<td>Start the emulator with the Game Select switch held down.</td>
+		</tr>
+
+		<tr>
+			<td><pre>-holdbutton0</pre></td>
+			<td>Start the emulator with the left joystick button held down.</td>
+		</tr>
+
+		<tr>
 			<td><pre>-pro &lt;props file&gt;</pre></td>
 			<td>Use the given properties file instead of stella.pro.</td>
 		</tr>
@@ -745,7 +745,7 @@
 		</tr>
 
 		<tr>
-			<td><pre>-tv &lt;Color|BlankAndWhite&gt;</pre></td>
+			<td><pre>-tv &lt;Color|BlackAndWhite&gt;</pre></td>
 			<td>Set "Console.TelevisionType" property.</td>
 		</tr>
 
@@ -790,11 +790,6 @@
 		<tr>
 			<td><pre>-height &lt;number&gt;</pre></td>
 			<td>Set "Display.Height" property (100 - 256).</td>
-		</tr>
-
-		<tr>
-			<td><pre>-cpu &lt;High|Low&gt;</pre></td>
-			<td>Set "Emulation.CPU" property.</td>
 		</tr>
 
 		<tr>
@@ -916,7 +911,7 @@
 
 		<tr>
 			<td>Exit emulator</td>
-			<td>Ctrl + q</td>
+			<td>Control + q</td>
 			<td>Cmd + q</td>
 		</tr>
 
@@ -930,6 +925,18 @@
 			<td>Enter/exit options mode</td>
 			<td>Tab</td>
 			<td>Tab</td>
+		</tr>
+
+		<tr>
+			<td>Enter/exit command mode</td>
+			<td>Backslash (\)</td>
+			<td>Backslash (\)</td>
+		</tr>
+
+		<tr>
+			<td>Enter/exit debugger</td>
+			<td>Backquote (`)</td>
+			<td>Backquote (`)</td>
 		</tr>
 
 		<tr>
@@ -1007,7 +1014,13 @@
 		<tr>
 			<td>Pause/resume emulation</td>
 			<td>Pause</td>
-			<td>Pause(FIXME)</td>
+			<td>Pause</td>
+		</tr>
+
+		<tr>
+			<td>Cheat code entry</td>
+			<td>Control + c</td>
+			<td>Cmd + c</td>
 		</tr>
 	</table>
 
@@ -1471,31 +1484,32 @@
 		<tr>
 			<td>Resize window to next <i>larger</i> size</td>
 			<td>Alt + =</td>
-			<td>Shift-Cmd + =</td>
+			<td>Cmd + =</td>
 		</tr>
 
 		<tr>
 			<td>Resize window to next <i>smaller</i> size</td>
 			<td>Alt + -</td>
-			<td>Shift-Cmd + -</td>
+			<td>Cmd + -</td>
 		</tr>
 
 		<tr>
 			<td>Toggle fullscreen/windowed mode</td>
 			<td>Alt + Enter</td>
-			<td>Shift-Cmd + Enter(FIXME)</td>
+			<td>Cmd + Enter</td>
 		</tr>
 
+<!--
 		<tr>
 			<td>Toggle OpenGL filtering modes</td>
 			<td>Alt + f</td>
 			<td>Shift-Cmd + f</td>
 		</tr>
-
+-->
 		<tr>
 			<td>Increase volume</td>
-			<td>Alt + f</td>
-			<td>Shift-Cmd + f</td>
+			<td>Alt + ]</td>
+			<td>Shift-Cmd + ]</td>
 		</tr>
 
 		<tr>
@@ -1551,6 +1565,18 @@
 			<td>Control + 3</td>
 			<td>Cmd + 3</td>
 		</tr>
+
+		<tr>
+			<td>Reload current ROM</td>
+			<td>Control + r</td>
+			<td>Cmd + r</td>
+		</tr>
+
+		<tr>
+			<td>Emulate 'frying' effect</td>
+			<td>Backspace</td>
+			<td>Backspace</td>
+		</tr>
 	</table>
 
 	<br><br><br>
@@ -1579,13 +1605,16 @@
 
 	<p>The following screenshots illustrate the event remapping process:<br><br>
 	<img src="graphics/eventmapping.png">
+	<p>
 	<img src="graphics/eventmapping_remap.png">
 
 	<br><br><br>
 	<p><h1>
 	<a name="Debugger">10. Integrated Debugger</a></h1>
 	<hr>
-FIXME - add info and snapshots for debugger
+
+	<p>Have a look at <a href="debugger.html">this page</a> for integrated debugger
+	documentation.
 
 	<br><br><br>
 	<p><h1>
@@ -1597,20 +1626,27 @@ FIXME - add info and snapshots for debugger
 	You must use the included <b>stella.pro</b> file.  Otherwise, the emulator
 	will try to guess the best settings for the game.</p>
 
+	<p>As of Stella 2.0, the properties file handling has changed.  Stella now uses
+	two properties files; a system-wide <b>stella.pro</b> and a per-user <b>user.pro</b>.
+	The system-wide file will not be modified by Stella, and is used as a default
+	database of properties.  The per-user file will contain all properties 'merged' by
+	the user (by pressing Alt-s while a game is running).  So this means that when
+	you upgrade Stella and stella.pro, your personal profile settings are preserved.</p>
+
 	<p>
 	<h2><b>Linux/Unix</b></h2>
-	<p>The Linux and Unix versions of Stella looks for the property file
-	in your <i>$HOME/.stella</i> directory.  If this file is not found there, 
-	Stella will look in the <i>/etc/</i> directory.
+	<p>The Linux and Unix versions of Stella looks for the system properties file
+	in <i>/etc/stella.pro</i> and your personal properties file in
+	<i>$HOME/.stella/user.pro</i>.
 
 	<p>
 	<h2><b>Macintosh</b></h2>
-	<p>The Mac version of Stella looks for the property file in the
+	<p>The Mac version of Stella looks for the properties file(s) in the
 	directory containing the application.</p>
 
 	<p>
 	<h2><b>Windows</b></h2>
-	<p>The Windows version of Stella looks for the property file in the same directory
+	<p>The Windows version of Stella looks for the properties file(s) in the directory
 	containing the application.  Future versions of Stella for Windows may look in
 	user-specific locations	(C:\Documents and Settings\...).</p>
 
@@ -1699,11 +1735,20 @@ FIXME - add info and snapshots for debugger
 		</tr>
 
 		<tr>
+			<td VALIGN="TOP"><i>Cartridge.Sound:</i></td>
+			<td>This property determines if the game should use 1 or 2 channels for
+			sound output.  All original Atari 2600 machines supported 1 channel only,
+			but some homebrew games have been written to take advantage of stereo
+			sound.  The value of this property must be Mono or Stereo.</td>
+		</tr>
+
+		<tr>
 			<td VALIGN="TOP"><i>Cartridge.Type:</i></td>
 			<td>This property indicates the bank-switching type for the game.
-			The value of this property must be: Auto-detect, 2K, 3F, 4K, AR, E0,
-			E7, F4SC, F6, F6SC, F8, F8SC, FASC, or FE.  For more information about
-			bank-switching see Kevin Horton's 2600 bank-switching document.</td>
+			The value of this property must be: Auto-detect, 2K, 3E, 3F, 4K, AR,
+			CV, DPC, E0, E7, F4, F4SC, F6, F6SC, F8, F8SC, FASC, FE, MB, MC or UA.
+			For more information about bank-switching see Kevin Horton's 2600
+			bank-switching document.</td>
 		</tr>
 
 		<tr>
@@ -1770,12 +1815,6 @@ FIXME - add info and snapshots for debugger
 			<td>This property indicates the number of scan-lines to display.
 			The value of this property must be <i>n</i> such that
 			100 &lt;= <i>n</i> &lt;= 256.</td>
-		</tr>
-
-		<tr>
-			<td VALIGN="TOP"><i>Emulation.CPU:</i></td>
-			<td>This property indicates the CPU emulation quality.  The value of
-			this property must be High or Low.</td>
 		</tr>
 
 		<tr>
@@ -1907,6 +1946,12 @@ FIXME - add info and snapshots for debugger
 		</tr>
 
 		<tr>
+			<td VALIGN="TOP">Kostas&nbsp;Nakos</td>
+			<td>Author/maintainer of the WinCE version of Stella starting with the
+				2.0 release</td>
+		</tr>
+
+		<tr>
 			<td VALIGN="TOP">Erik&nbsp;Kovach</td>
 			<td>Author of the property file for release 0.7, 1.0, 1.1, and 1.2 of Stella</td>
 		</tr>
@@ -2025,10 +2070,17 @@ FIXME - add info and snapshots for debugger
 		</tr>
 
 		<tr>
+			<td VALIGN="TOP">David&nbsp;Voswinkel</td>
+			<td>Maintainer of the PSP version of Stella starting with the 2.0 release</td>
+		</tr>
+
+		<tr>
 			<td VALIGN="TOP">Brian&nbsp;Watson</td>
 			<td>Helped with getting the illegal CPU instruction support working with Stella.
 			Brian also submitted a number of other changes, such as debugger support, which
-			will be integrated into the 1.5 release of Stella.</td>
+			have been finally integrated into the 2.0 release of Stella.  Without
+			a doubt, there would be no debugger support in Stella if not for the
+			tireless work of Brian.</td>
 		</tr>
 
 		<tr>

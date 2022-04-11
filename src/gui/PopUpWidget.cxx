@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: PopUpWidget.cxx,v 1.16 2005/08/30 17:51:26 stephena Exp $
+// $Id: PopUpWidget.cxx,v 1.22 2005/10/02 22:09:12 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
@@ -26,6 +26,7 @@
 #include "Dialog.hxx"
 #include "DialogContainer.hxx"
 #include "GuiUtils.hxx"
+#include "StringListWidget.hxx"
 #include "PopUpWidget.hxx"
 
 #define UP_DOWN_BOX_HEIGHT	10
@@ -44,32 +45,17 @@ static unsigned int up_down_arrows[8] = {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 PopUpDialog::PopUpDialog(PopUpWidget* boss, int clickX, int clickY)
-    : Dialog(boss->instance(), boss->parent(), 0, 0, 16, 16),
-      _popUpBoss(boss)
+  : Dialog(boss->instance(), boss->parent(), 0, 0, 16, 16),
+    _popUpBoss(boss)
 {
   // Copy the selection index
   _selection = _popUpBoss->_selectedItem;
 
-  // Calculate real popup dimensions
+	// Calculate real popup dimensions
   _x = _popUpBoss->getAbsX() + _popUpBoss->_labelWidth;
   _y = _popUpBoss->getAbsY() - _popUpBoss->_selectedItem * kLineHeight;
-  _w = _popUpBoss->_w - 10 - _popUpBoss->_labelWidth;
-  _h = 2;  // this will increase as more items are added
-	
-  // Perform clipping / switch to scrolling mode if we don't fit on the screen
-  int height = instance()->frameBuffer().baseHeight();
-  if(_h >= height)
-    _h = height - 1;
-  if(_y < 0)
-    _y = 0;
-  else if(_y + _h >= height)
-    _y = height - _h - 1;
-
-  // TODO - implement scrolling if we had to move the menu, or if there are too many entries
-
-  // Remember original mouse position
-  _clickX = clickX - _x;
-  _clickY = clickY - _y;
+  _w = _popUpBoss->_w - kLineHeight + 2 - _popUpBoss->_labelWidth;
+  _h = 2;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -80,37 +66,28 @@ void PopUpDialog::drawDialog()
   // by the ScummVM guys, so I'm not going to mess with it.
   if(_dirty)
   {
-//    cerr << "PopUpDialog::drawDialog()\n";
-    FrameBuffer& fb = _popUpBoss->instance()->frameBuffer();
+    FrameBuffer& fb = instance()->frameBuffer();
 
     // Draw the menu border
-    fb.hLine(_x, _y, _x+_w - 1, kColor);
+    fb.hLine(_x, _y, _x + _w - 1, kColor);
     fb.hLine(_x, _y + _h - 1, _x + _w - 1, kShadowColor);
-    fb.vLine(_x, _y, _y+_h - 1, kColor);
+    fb.vLine(_x, _y, _y + _h - 1, kColor);
     fb.vLine(_x + _w - 1, _y, _y + _h - 1, kShadowColor);
+
+    // If necessary, draw dividing line
+    if(_twoColumns)
+      fb.vLine(_x + _w / 2, _y, _y + _h - 2, kColor);
 
     // Draw the entries
     int count = _popUpBoss->_entries.size();
     for(int i = 0; i < count; i++)
-    {
-      bool hilite = i == _selection;
-      int x = _x + 1;
-      int y = _y + 1 + i * kLineHeight;
-      int w = _w - 2;
-      string& name = _popUpBoss->_entries[i].name;
+      drawMenuEntry(i, i == _selection);
 
-      fb.fillRect(x, y, w, kLineHeight, hilite ? kTextColorHi : kBGColor);
+    // The last entry may be empty. Fill it with black.
+    if(_twoColumns && (count & 1))
+      fb.fillRect(_x + 1 + _w / 2, _y + 1 + kLineHeight * (_entriesPerColumn - 1),
+                  _w / 2 - 1, kLineHeight, kBGColor);
 
-      if(name.size() == 0)
-      {
-        // Draw a separator
-        fb.hLine(x - 1, y + kLineHeight / 2, x + w, kShadowColor);
-        fb.hLine(x, y + 1 + kLineHeight / 2, x + w, kColor);
-      }
-      else
-        fb.drawString(_popUpBoss->font(), name, x + 1, y + 2, w - 2,
-                      hilite ? kBGColor : kTextColor);
-    }
     _dirty = false;
     fb.addDirtyRect(_x, _y, _w, _h);
   }
@@ -119,11 +96,11 @@ void PopUpDialog::drawDialog()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void PopUpDialog::handleMouseDown(int x, int y, int button, int clickCount)
 {
-  sendSelection();
-
-  _clickX = -1;
-  _clickY = -1;
-  _openTime = (unsigned int)-1;
+  // Only make a selection if we're in the dialog area
+  if(x >= 0 && x < _w && y >= 0 && y < _h)
+    sendSelection();
+  else
+    cancelSelection();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -157,11 +134,14 @@ void PopUpDialog::handleKeyDown(int ascii, int keycode, int modifiers)
   if(isMouseDown())
     return;
 
-  switch(keycode)
+  switch (ascii)
   {
     case '\n':      // enter/return
     case '\r':
       sendSelection();
+      break;
+    case 27:        // escape
+      cancelSelection();
       break;
     case 256+17:    // up arrow
       moveUp();
@@ -179,10 +159,136 @@ void PopUpDialog::handleKeyDown(int ascii, int keycode, int modifiers)
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void PopUpDialog::drawMenuEntry(int entry, bool hilite)
+{
+  FrameBuffer& fb = instance()->frameBuffer();
+
+  // Draw one entry of the popup menu, including selection
+  int x, y, w;
+
+  if(_twoColumns)
+  {
+    int n = _popUpBoss->_entries.size() / 2;
+
+    if(_popUpBoss->_entries.size() & 1)
+      n++;
+
+    if (entry >= n)
+    {
+      x = _x + 1 + _w / 2;
+      y = _y + 1 + kLineHeight * (entry - n);
+    }
+    else
+    {
+      x = _x + 1;
+      y = _y + 1 + kLineHeight * entry;
+    }
+
+    w = _w / 2 - 1;
+  }
+  else
+  {
+    x = _x + 1;
+    y = _y + 1 + kLineHeight * entry;
+    w = _w - 2;
+  }
+
+  string& name = _popUpBoss->_entries[entry].name;
+  fb.fillRect(x, y, w, kLineHeight, hilite ? kTextColorHi : kBGColor);
+
+  if(name.size() == 0)
+  {
+    // Draw a separator
+    fb.hLine(x - 1, y + kLineHeight / 2, x + w, kShadowColor);
+    fb.hLine(x, y + 1 + kLineHeight / 2, x + w, kColor);
+  }
+  else
+    fb.drawString(_popUpBoss->font(), name, x + 1, y + 2, w - 2,
+                  hilite ? kBGColor : kTextColor);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void PopUpDialog::recalc()
+{
+  // Perform clipping / switch to scrolling mode if we don't fit on the screen
+  const int height = instance()->frameBuffer().baseHeight();
+
+  _h = _popUpBoss->_entries.size() * kLineHeight + 2;
+
+  // HACK: For now, we do not do scrolling. Instead, we draw the dialog
+  // in two columns if it's too tall.
+  if(_h >= height)
+  {
+    const int width = instance()->frameBuffer().baseWidth();
+
+    _twoColumns = true;
+    _entriesPerColumn = _popUpBoss->_entries.size() / 2;
+
+    if(_popUpBoss->_entries.size() & 1)
+      _entriesPerColumn++;
+
+    _h = _entriesPerColumn * kLineHeight + 2;
+    _w = 0;
+
+    // Find width of largest item
+    for(unsigned int i = 0; i < _popUpBoss->_entries.size(); i++)
+    {
+      int width = _font->getStringWidth(_popUpBoss->_entries[i].name);
+
+      if(width > _w)
+      _w = width;
+    }
+
+    _w = 2 * _w + 10;
+
+    if (!(_w & 1))
+      _w++;
+
+    if(_popUpBoss->_selectedItem >= _entriesPerColumn)
+    {
+      _x -= _w / 2;
+      _y = _popUpBoss->getAbsY() - (_popUpBoss->_selectedItem - _entriesPerColumn) * kLineHeight;
+    }
+
+    if(_w >= width)
+      _w = width - 1;
+    if(_x < 0)
+      _x = 0;
+    if(_x + _w >= width)
+      _x = width - 1 - _w;
+  }
+  else
+    _twoColumns = false;
+
+  if(_h >= height)
+    _h = height - 1;
+  if(_y < 0)
+    _y = 0;
+  else if(_y + _h >= height)
+    _y = height - 1 - _h;
+
+  // TODO - implement scrolling if we had to move the menu, or if there are too many entries
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 int PopUpDialog::findItem(int x, int y) const
 {
   if(x >= 0 && x < _w && y >= 0 && y < _h)
-    return (y-2) / kLineHeight;
+  {
+    if(_twoColumns)
+    {
+      unsigned int entry = (y - 2) / kLineHeight;
+      if(x > _w / 2)
+      {
+        entry += _entriesPerColumn;
+
+        if(entry >= _popUpBoss->_entries.size())
+          return -1;
+      }
+      return entry;
+    }
+    return (y - 2) / kLineHeight;
+  }
 
   return -1;
 }
@@ -204,16 +310,25 @@ void PopUpDialog::setSelection(int item)
 void PopUpDialog::sendSelection()
 {
   if(_popUpBoss->_cmd)
-    _popUpBoss->sendCommand(_popUpBoss->_cmd, _selection, _popUpBoss->_id);
+    _popUpBoss->sendCommand(_popUpBoss->_cmd,
+                            _popUpBoss->_entries[_selection].tag,
+                            _popUpBoss->_id);
 
   // We remove the dialog when the user has selected an item
   parent()->removeDialog();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void PopUpDialog::cancelSelection()
+{
+  setSelection(_oldSelection);
+  parent()->removeDialog();
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool PopUpDialog::isMouseDown()
 {
-  // TODO/FIXME - need a way to determine whether any mouse buttons are pressed or not.
+  // TODO - need a way to determine whether any mouse buttons are pressed or not.
   // Sure, we could just count mouse button up/down events, but that is cumbersome and
   // error prone. Would be much nicer to add an API to OSystem for this...
 
@@ -264,13 +379,14 @@ void PopUpDialog::moveDown()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 PopUpWidget::PopUpWidget(GuiObject* boss, int x, int y, int w, int h,
                          const string& label, int labelWidth, int cmd)
-    : Widget(boss, x, y - 1, w, h + 2),
-      CommandSender(boss),
-      _label(label),
-      _labelWidth(labelWidth),
-      _cmd(cmd)
+  : Widget(boss, x, y - 1, w, h + 2),
+    CommandSender(boss),
+    _label(label),
+    _labelWidth(labelWidth),
+    _cmd(cmd)
 {
-  _flags = WIDGET_ENABLED | WIDGET_CLEARBG | WIDGET_RETAIN_FOCUS;
+  _flags = WIDGET_ENABLED | WIDGET_CLEARBG | WIDGET_RETAIN_FOCUS |
+           WIDGET_NODRAW_FOCUS;
   _type = kPopUpWidget;
 
   _selectedItem = -1;
@@ -292,7 +408,10 @@ PopUpWidget::~PopUpWidget()
 void PopUpWidget::handleMouseDown(int x, int y, int button, int clickCount)
 {
   if(isEnabled())
+  {
+    myPopUpDialog->_oldSelection = _selectedItem;
     parent()->addDialog(myPopUpDialog);
+  }
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -304,7 +423,9 @@ void PopUpWidget::appendEntry(const string& entry, int tag)
   _entries.push_back(e);
 
   // Each time an entry is added, the popup dialog gets larger
-  myPopUpDialog->setHeight(myPopUpDialog->getHeight() + kLineHeight);
+  // This isn't as efficient as it could be, since it's called
+  // each time an entry is added (which can be dozens of times).
+  myPopUpDialog->recalc();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

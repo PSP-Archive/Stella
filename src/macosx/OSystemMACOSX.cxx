@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: OSystemMACOSX.cxx,v 1.4 2005/06/16 01:11:29 stephena Exp $
+// $Id: OSystemMACOSX.cxx,v 1.6 2005/09/14 01:50:42 markgrebe Exp $
 //============================================================================
 
 #include <cstdlib>
@@ -73,10 +73,9 @@ OSystemMACOSX::OSystemMACOSX()
   string statedir = basedir + "/state";
   setStateDir(statedir);
 
-  string userPropertiesFile   = basedir + "/stella.pro";
-  strcat(parentdir,"/../../../stella.pro");
-  string systemPropertiesFile = parentdir;
-  setPropertiesFiles(userPropertiesFile, systemPropertiesFile);
+  strcat(parentdir,"/../../..");
+  string systemPropertiesDir = parentdir;
+  setPropertiesDir(basedir, systemPropertiesDir);
 
   string userConfigFile   = basedir + "/stellarc";
   string systemConfigFile = "/etc/stellarc";

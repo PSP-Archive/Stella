@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: TiaZoomWidget.cxx,v 1.3 2005/09/01 16:49:52 stephena Exp $
+// $Id: TiaZoomWidget.cxx,v 1.5 2005/09/23 23:35:02 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
@@ -35,7 +35,7 @@ TiaZoomWidget::TiaZoomWidget(GuiObject* boss, int x, int y)
 {
   _flags = WIDGET_ENABLED | WIDGET_CLEARBG | WIDGET_RETAIN_FOCUS;
 
-  _w = 200;
+  _w = 210;
   _h = 120;
 
   addFocusWidget(this);
@@ -145,7 +145,7 @@ bool TiaZoomWidget::handleKeyDown(int ascii, int keycode, int modifiers)
 {
   bool handled = false;
 
-  switch (keycode)
+  switch(ascii)
   {
     case 256+17:  // up arrow
       myYCenter -= 4;

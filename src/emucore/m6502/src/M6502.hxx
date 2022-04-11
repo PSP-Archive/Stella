@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: M6502.hxx,v 1.13 2005/08/24 22:54:30 stephena Exp $
+// $Id: M6502.hxx,v 1.16 2005/12/09 01:16:13 stephena Exp $
 //============================================================================
 
 #ifndef M6502_HXX
@@ -33,7 +33,7 @@ class PackedBitArray;
 #include "Array.hxx"
 #include "StringList.hxx"
 
-typedef GUI::Array<Expression*> ExpressionList;
+typedef Common::Array<Expression*> ExpressionList;
 
 /**
   This is an abstract base class for classes that emulate the
@@ -41,7 +41,7 @@ typedef GUI::Array<Expression*> ExpressionList;
   has a 64K addressing space.
 
   @author  Bradford W. Mott
-  @version $Id: M6502.hxx,v 1.13 2005/08/24 22:54:30 stephena Exp $ 
+  @version $Id: M6502.hxx,v 1.16 2005/12/09 01:16:13 stephena Exp $ 
 */
 class M6502
 {
@@ -164,6 +164,13 @@ class M6502
       return myExecutionStatus & FatalErrorBit;
     }
   
+    /**
+      Get the 16-bit value of the Program Counter register.
+
+      @return The program counter register
+    */
+    uInt16 getPC() const { return PC; }
+
   public:
     /**
       Overload the ostream output operator for addressing modes.
@@ -229,12 +236,17 @@ class M6502
     /// Pointer to the debugger for this processor or the null pointer
     Debugger* myDebugger;
 
-    PackedBitArray *breakPoints;
-    PackedBitArray *readTraps;
-    PackedBitArray *writeTraps;
+    PackedBitArray* myBreakPoints;
+    PackedBitArray* myReadTraps;
+    PackedBitArray* myWriteTraps;
 
-    // did we just now hit a trap?
-    bool justHitTrap;
+    // Did we just now hit a trap?
+    bool myJustHitTrapFlag;
+    struct HitTrapInfo {
+      string message;
+      int address;
+    };
+    HitTrapInfo myHitTrapInfo;
 
     StringList myBreakCondNames;
     ExpressionList myBreakConds;

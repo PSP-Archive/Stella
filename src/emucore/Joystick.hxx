@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Joystick.hxx,v 1.2 2005/06/16 01:11:27 stephena Exp $
+// $Id: Joystick.hxx,v 1.4 2005/11/12 22:59:20 stephena Exp $
 //============================================================================
 
 #ifndef JOYSTICK_HXX
@@ -26,7 +26,7 @@
   The standard Atari 2600 joystick controller.
 
   @author  Bradford W. Mott
-  @version $Id: Joystick.hxx,v 1.2 2005/06/16 01:11:27 stephena Exp $
+  @version $Id: Joystick.hxx,v 1.4 2005/11/12 22:59:20 stephena Exp $
 */
 class Joystick : public Controller
 {
@@ -72,5 +72,5 @@ class Joystick : public Controller
     */
     virtual void write(DigitalPin pin, bool value);
 };
-#endif
 
+#endif

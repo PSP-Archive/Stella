@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: StringList.hxx,v 1.3 2005/06/16 00:56:00 stephena Exp $
+// $Id: StringList.hxx,v 1.5 2005/12/18 18:37:03 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
@@ -26,7 +26,7 @@
 #include "bspf.hxx"
 
 
-class StringList : public GUI::Array<string>
+class StringList : public Common::Array<string>
 {
   public:
     void push_back(const char *str)
@@ -39,6 +39,26 @@ class StringList : public GUI::Array<string>
     {
       ensureCapacity(_size + 1);
       _data[_size++] = str;
+    }
+
+    static string removePattern(const string& str, const string& pattern)
+    {
+      // This can probably be made more efficient ...
+      string tmp;
+      for(unsigned int i = 0; i < str.length(); ++i)
+      {
+        bool match = false;
+        for(unsigned int j = 0; j < pattern.length(); ++j)
+        {
+          if(str[i] == pattern[j])
+          {
+            match = true;
+            break;
+          }
+        }
+        if(!match) tmp += str[i];
+      }
+      return tmp;
     }
 };
 

@@ -4,18 +4,18 @@ MODULE_OBJS := \
 	src/gui/AboutDialog.o \
 	src/gui/AudioDialog.o \
 	src/gui/BrowserDialog.o \
-	src/gui/CheatCodeDialog.o \
 	src/gui/CommandDialog.o \
 	src/gui/CommandMenu.o \
 	src/gui/DialogContainer.o \
 	src/gui/Dialog.o \
 	src/gui/EditableWidget.o \
 	src/gui/EditTextWidget.o \
-	src/gui/EventMappingDialog.o \
+	src/gui/EventMappingWidget.o \
 	src/gui/Font.o \
 	src/gui/GameInfoDialog.o \
 	src/gui/GameList.o \
 	src/gui/HelpDialog.o \
+	src/gui/InputDialog.o \
 	src/gui/InputTextDialog.o \
 	src/gui/Launcher.o \
 	src/gui/LauncherDialog.o \

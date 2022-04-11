@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: Booster.cxx,v 1.3 2005/06/16 00:55:57 stephena Exp $
+// $Id: Booster.cxx,v 1.5 2005/11/12 22:59:20 stephena Exp $
 //============================================================================
 
 #include "Event.hxx"
@@ -23,6 +23,7 @@
 BoosterGrip::BoosterGrip(Jack jack, const Event& event)
     : Controller(jack, event)
 {
+  myType = Controller::BoosterGrip;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -102,4 +103,3 @@ void BoosterGrip::write(DigitalPin, bool)
 {
   // Writing doesn't do anything to the booster grip...
 }
-

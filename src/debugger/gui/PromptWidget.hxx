@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: PromptWidget.hxx,v 1.1 2005/08/30 17:51:26 stephena Exp $
+// $Id: PromptWidget.hxx,v 1.3 2005/10/11 17:14:35 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
@@ -79,12 +79,13 @@ class PromptWidget : public Widget, public CommandSender
     bool handleKeyDown(int ascii, int keycode, int modifiers);
     void handleCommand(CommandSender* sender, int cmd, int data, int id);
 
+    virtual GUI::Rect getRect() const;
     virtual bool wantsFocus() { return true; }
 
     void loadConfig();
 
   protected:
-    int _buffer[kBufferSize];
+    int  _buffer[kBufferSize];
     int  _linesInBuffer;
 
     int  _lineWidth;

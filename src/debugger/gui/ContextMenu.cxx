@@ -13,7 +13,7 @@
 // See the file "license" for information on usage and redistribution of
 // this file, and for a DISCLAIMER OF ALL WARRANTIES.
 //
-// $Id: ContextMenu.cxx,v 1.1 2005/08/31 19:15:10 stephena Exp $
+// $Id: ContextMenu.cxx,v 1.4 2005/10/06 17:28:55 stephena Exp $
 //
 //   Based on code from ScummVM - Scumm Interpreter
 //   Copyright (C) 2002-2004 The ScummVM project
@@ -75,8 +75,15 @@ const string& ContextMenu::getSelectedString() const
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void ContextMenu::handleMouseDown(int x, int y, int button, int clickCount)
 {
+  // Only do a selection when the left button is in the dialog
   if(button == 1)
-    sendSelection();
+  {
+    x += getAbsX(); y += getAbsY();
+    if(x >= _x && x <= _x+_w && y >= _y && y <= _y+_h)
+      sendSelection();
+    else
+      parent()->removeDialog();
+  }
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -103,8 +110,11 @@ void ContextMenu::handleMouseMoved(int x, int y, int button)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void ContextMenu::handleKeyDown(int ascii, int keycode, int modifiers)
 {
-  switch(keycode)
+  switch(ascii)
   {
+    case 27:        // escape
+      parent()->removeDialog();
+      break;
     case '\n':      // enter/return
     case '\r':
       sendSelection();
@@ -147,10 +157,10 @@ void ContextMenu::setSelection(int item)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void ContextMenu::sendSelection()
 {
-  sendCommand(kCMenuItemSelectedCmd, _selectedItem, -1);
-
   // We remove the dialog when the user has selected an item
   parent()->removeDialog();
+
+  sendCommand(kCMenuItemSelectedCmd, _selectedItem, -1);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
